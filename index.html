@@ -705,10 +705,12 @@ function khoiTelegram(t){
     <details class="khoa" style="margin-top:6px"><summary>Muốn dùng nhóm Telegram cho nhiều người cùng xem?</summary>
       <p style="margin:8px 0">Bấm nút này, chọn nhóm (hoặc tạo nhóm mới trước), Telegram tự thêm bot vào và nối luôn. Nhớ cho bot làm quản trị viên để CEO đọc được tin nhắn thường.</p>
       <a class="nut" href="https://t.me/${bot}?startgroup=ketnoi_${ma}&admin=pin_messages" target="_blank" rel="noopener">👥 Thêm bot vào nhóm</a>
-      <p style="margin:8px 0 0">Nút không mở được thì gõ tay vào nhóm hoặc vào chat với bot: <span class="ma">/ketnoi ${esc(t.maKetNoi)}</span></p></details>
+      <p style="margin:8px 0">Hoặc thêm tay: trong nhóm bấm <b>Thêm thành viên</b>, dán đúng tên này vào ô tìm: <span class="ma">@${esc(t.tenBot)}</span> <button class="nut" type="button" data-chep="@${esc(t.tenBot)}" style="padding:3px 10px">Chép</button><br>Không thấy bot thì mở chat với bot, bấm Start trước rồi tìm lại.</p>
+      <p style="margin:8px 0 0">Thêm xong gõ dòng này vào nhóm: <span class="ma">/ketnoi ${esc(t.maKetNoi)}</span> <button class="nut" type="button" data-chep="/ketnoi ${esc(t.maKetNoi)}" style="padding:3px 10px">Chép</button></p></details>
     <p class="bao" id="tgBao">Đang đợi bạn bấm Start…</p>`;
 }
 function ganTelegram(b){
+  b.querySelectorAll("[data-chep]").forEach(x=>x.onclick=()=>{navigator.clipboard&&navigator.clipboard.writeText(x.dataset.chep).then(()=>{x.textContent="Đã chép";setTimeout(()=>x.textContent="Chép",1500)},()=>{})});
   const nut=b.querySelector("#tgLuu");if(!nut)return;
   nut.onclick=async()=>{const bao=b.querySelector("#tgBao");bao.className="bao";bao.textContent="Đang kiểm tra…";
     try{const j=await api("/api/telegram",{token:b.querySelector("#tgMa").value.trim()});bao.className="bao ok";bao.textContent="Mã đúng: @"+j.tenBot;await keoTrangThai();veNgan();if(!$("#moDau").hidden)moDau(3)}
