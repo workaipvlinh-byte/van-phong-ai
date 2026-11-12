@@ -36,6 +36,7 @@ Bộ cài này **miễn phí**. Nếu bạn phải trả tiền để có nó, b
 | Khám sức khoẻ văn phòng | `/kiemtra` |
 | Ghi sổ | `/chi 200k mua tên miền`, `/thu 3tr làm web cho khách`, `/so` |
 | Dạy văn phòng điều cần nhớ | `/nho Shop chỉ bán áo nam` |
+| Dạy nhân viên một cách làm cố định | Thêm skill vào `van-phong/.claude/skills/` (có skill mẫu viết bài bán hàng) |
 
 ## Thư mục
 
@@ -44,6 +45,7 @@ van_phong.py        bộ máy chính (Telegram, Claude Code, lịch, khay việc
 index.html          bảng điều khiển
 van-phong/          chỗ nhân viên làm việc
   brain/            bộ não chung, nhân viên đọc trước khi làm
+  .claude/skills/   skill cho nhân viên: bỏ thư mục skill vào là dùng được
   tai-lieu/         file bạn để cho nhân viên đọc: sản phẩm, chính sách, tồn kho...
   ket-qua/          kết quả từng nhân viên, lưu theo ngày
 data/               cấu hình, khay việc, sổ thu chi, nhật ký (tự tạo)

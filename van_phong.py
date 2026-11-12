@@ -398,7 +398,7 @@ def dung_het():
     return n, bo
 
 
-def goi_claude(prompt, model, timeout=25 * 60, tools="WebSearch,WebFetch,Read,Write,Edit,Glob,Grep"):
+def goi_claude(prompt, model, timeout=25 * 60, tools="WebSearch,WebFetch,Read,Write,Edit,Glob,Grep,Skill"):
     if not CLAUDE:
         raise RuntimeError("Không tìm thấy Claude Code. Cài Claude Code, đăng nhập, rồi chạy lại văn phòng.")
     env = dict(os.environ)
@@ -474,7 +474,8 @@ def prompt_nv(c, n, dau_vao):
 Câu trả lời cuối cùng sẽ gửi nguyên văn cho {c['sep']} qua Telegram.
 - Dòng đầu: tiêu đề ngắn cho việc này (dưới 10 chữ).
 - Sau đó là kết quả: tiếng Việt, gọn, dễ copy, không dùng bảng markdown, không dùng ** **.
-- Không kể lể bạn đã làm những bước gì."""
+- Không kể lể bạn đã làm những bước gì.
+- Nếu có skill phù hợp với việc này (trong .claude/skills), dùng skill đó."""
 
 
 def xep(viec, ten="việc"):
