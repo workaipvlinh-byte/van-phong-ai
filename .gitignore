@@ -1,0 +1,7 @@
+.env
+data/
+__pycache__/
+van-phong/ket-qua/
+van-phong/brain/00-ve-chu.md
+van-phong/brain/99-ghi-nho.md
+xem-thu/
