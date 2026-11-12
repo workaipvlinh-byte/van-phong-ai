@@ -37,7 +37,7 @@ F_ENV = os.path.join(BASE, ".env")
 
 KHOA = threading.RLock()
 BAN_QUYEN = "© 2026 Phạm Linh · toihocai.com · bản phát hành miễn phí"
-PHIEN_BAN = "1.4.0"
+PHIEN_BAN = "1.5.0"
 CHAN_TRANG = ('<div class="nguon-tu-dong" style="position:fixed;right:12px;bottom:10px;z-index:30;font:500 11.5px system-ui,sans-serif;'
               'color:#8a92c4;background:rgba(7,8,20,.75);padding:3px 9px;border-radius:999px">Văn Phòng AI · ' + BAN_QUYEN + '</div>')
 
@@ -439,6 +439,7 @@ TRO_GIUP = """Nhắn bình thường là CEO nghe và giao việc.
 /dung  dừng mọi việc đang chạy
 /kiemtra  khám sức khoẻ văn phòng
 /tiendo  xem nhân viên nào đang chạy việc gì, việc nào đang chờ
+/tieptuc  chạy tiếp hàng chờ sau khi gói Claude hết lượt rồi có lại
 /chi 200k mua tên miền  ·  /thu 3tr làm web cho khách
 /so  xem sổ thu chi tháng này
 /nho <điều cần nhớ>  ghi vào bộ não chung
@@ -462,6 +463,11 @@ def xu_ly_lenh(chu, tu_web=False):
         if not khay_dua(ep=True, loai=sau):
             gui("Khay trống, chưa có việc nào chờ sếp 👌", ai="🗂 Thư Ký")
         return "ok"
+    if lenh == "/tieptuc":
+        if not TAM_DUNG["den"]:
+            gui("Văn phòng đang chạy bình thường, không có gì tạm dừng.", ai="💼 CEO"); return "ok"
+        TAM_DUNG["den"] = 0
+        gui("▶ Chạy tiếp hàng chờ.", ai="💼 CEO"); return "ok"
     if lenh == "/tiendo":
         gui(mo_ta_ban(), ai="💼 CEO"); return "ok"
     if lenh == "/kiemtra":
@@ -494,14 +500,32 @@ def xu_ly_lenh(chu, tu_web=False):
 
 
 def bao_ban(viec, ten):
-    """Văn phòng đang chạy việc khác: không chạy chồng (dễ hết lượt Claude), hỏi sếp xếp hàng hay dừng việc cũ."""
-    vid = str(random.randint(10000, 99999))
-    CHO_TIN[vid] = (viec, ten)
-    while len(CHO_TIN) > 20:
-        CHO_TIN.pop(next(iter(CHO_TIN)))
-    gui(f"Em đang bận, chưa nhận thêm để khỏi cháy lượt Claude.\n{mo_ta_ban()}\n\nViệc mới: {ten}",
-        nut=[[("📋 Xếp hàng, làm sau", f"bn:{vid}:xep"), ("⛔ Dừng việc đang chạy", f"bn:{vid}:dung")]], ai="💼 CEO")
+    """Văn phòng đang chạy việc khác: không chạy chồng (dễ hết lượt Claude). Tin tới lúc bận gom vào 1 thông báo,
+    sếp bấm 1 lần "Xếp hàng tất cả" hoặc "Dừng việc đang chạy"."""
+    GOM["ds"] = (GOM["ds"] + [(viec, ten)])[-12:]
+    chu = (f"Em đang bận, chưa chạy thêm để khỏi cháy lượt Claude.\n{mo_ta_ban()}\n\n"
+           f"Đã nhận {len(GOM['ds'])} tin lúc bận:\n" + "\n".join(f"{i}. {t}" for i, (_, t) in enumerate(GOM["ds"], 1)))
+    nut = json.dumps({"inline_keyboard": [[{"text": f"📋 Xếp hàng tất cả ({len(GOM['ds'])})", "callback_data": "bn:gom:xep"},
+                                           {"text": "⛔ Dừng việc đang chạy", "callback_data": "bn:gom:dung"}]]})
+    if GOM["msg"]:
+        try:
+            tg("editMessageText", {"chat_id": ENV["TG_CHAT_ID"], "message_id": GOM["msg"], "text": "💼 CEO\n" + chu, "reply_markup": nut})
+            return "ban"
+        except Exception:
+            pass
+    r = gui(chu, nut=[[(f"📋 Xếp hàng tất cả ({len(GOM['ds'])})", "bn:gom:xep"), ("⛔ Dừng việc đang chạy", "bn:gom:dung")]], ai="💼 CEO")
+    try:
+        GOM["msg"] = r["result"]["message_id"]
+    except Exception:
+        GOM["msg"] = None
     return "ban"
+
+
+def xep_mot(viec, so=""):
+    if viec[0] == "ceo":
+        xep(lambda t=viec[1]: ceo_mot_luot(t), "CEO", "trả lời: " + viec[1][:60])
+    else:
+        xep_viec(viec[1], viec[2], nguon="sep", so=so)
 
 
 def bam_nut(ma):
@@ -509,24 +533,20 @@ def bam_nut(ma):
     if loai == "k":                       # khay: k:<id>:xong|mai|bo
         kid, _, hd = phan.partition(":")
         return khay_bam(kid, hd)
-    if loai == "bn":                      # lúc bận: bn:<id>:xep|dung
-        vid, _, hd = phan.partition(":")
+    if loai == "bn":                      # lúc bận: bn:gom:xep|dung
+        _, _, hd = phan.partition(":")
         if hd == "dung":
             n, bo = dung_het()
-            CHO_TIN.pop(vid, None)
             return f"Đã dừng {n} việc, bỏ {bo} việc chờ. Gửi lại yêu cầu nhé"
-        x = CHO_TIN.pop(vid, None)
-        if not x:
-            return "Tin này xử lý rồi"
-        if len(CHO) >= MAX_CHO:
-            CHO_TIN[vid] = x
-            return f"Hàng chờ đầy ({MAX_CHO} việc). Đợi bớt rồi bấm lại"
-        (viec, ten) = x
-        if viec[0] == "ceo":
-            xep(lambda t=viec[1]: ceo_mot_luot(t), "CEO", "trả lời: " + viec[1][:60])
-        else:
-            xep_viec(viec[1], viec[2], nguon="sep")
-        return f"Đã xếp hàng, thứ {len(CHO)}"
+        ds, GOM["ds"], GOM["msg"] = GOM["ds"], [], None
+        if not ds:
+            return "Mấy tin này xử lý rồi"
+        cho_duoc = max(0, MAX_CHO - len(CHO))
+        for viec, _ in ds[:cho_duoc]:
+            xep_mot(viec)
+        if len(ds) > cho_duoc:
+            return f"Xếp được {cho_duoc} việc, hàng chờ đầy ({MAX_CHO}). {len(ds) - cho_duoc} tin sau gửi lại sau nhé"
+        return f"Đã xếp {len(ds)} việc vào hàng, đang có {len(CHO)} việc chờ"
     if loai == "kh":                      # kế hoạch CEO: kh:<id>:lam|thoi
         kid, _, hd = phan.partition(":")
         kh = KE_HOACH.pop(kid, None)
@@ -534,9 +554,9 @@ def bam_nut(ma):
             return "Kế hoạch này xử lý rồi"
         if hd == "lam":
             truoc = len(CHO) + (1 if dang_ban() and not CHO else 0)
-            for nid, viec in kh:
-                xep_viec(nid, viec, nguon="ceo")
-            return "Triển khai!" if not truoc else f"Đã xếp hàng, làm sau {truoc} việc đang có"
+            for i, (nid, viec) in enumerate(kh, 1):
+                xep_viec(nid, viec, nguon="ceo", so=f"{i}/{len(kh)}" if len(kh) > 1 else "")
+            return ("Triển khai!" if not truoc else f"Đã xếp hàng, làm sau {truoc} việc đang có") + (f" · {len(kh)} việc chạy lần lượt" if len(kh) > 1 else "")
         return "Đã huỷ"
     return ""
 
@@ -548,8 +568,11 @@ HANG = queue.Queue()
 KHOA_AI = threading.Lock()  # mỗi lúc chỉ 1 phiên Claude chạy: giao dồn 2-3 việc một lúc là cháy lượt
 CHAY = {}                  # phiên Claude đang chạy: ai, viec, bat_dau, buoc, so_buoc
 CHO = deque()              # (tên, mô tả) các việc đang xếp hàng, để hiện cho sếp
-MAX_CHO = 3                # sếp tự giao thêm tối đa 3 việc chờ; việc theo lịch không tính
-CHO_TIN = {}               # tin sếp gửi lúc văn phòng bận, chờ sếp bấm "Xếp hàng"
+MAX_CHO = 8                # hàng chờ sếp tự giao tối đa 8 việc; việc theo lịch không tính
+MAX_KE_HOACH = 8           # 1 tin nhắn CEO chia ra tối đa 8 việc
+GOM = {"ds": [], "msg": None}   # tin sếp gửi lúc bận, gom vào 1 thông báo, chờ sếp bấm "Xếp hàng tất cả"
+TAM_DUNG = {"den": 0}      # hết lượt Claude: giữ hàng chờ tới giờ này (0 = đang chạy bình thường)
+THE_HE = [0]               # tăng mỗi lần /dung, để việc đang giữ biết mà bỏ
 
 
 def dang_ban():
@@ -564,6 +587,8 @@ def phut_giay(giay):
 def mo_ta_ban():
     """Một đoạn ngắn cho sếp biết văn phòng đang chạy gì, chờ gì."""
     dong = []
+    if TAM_DUNG["den"]:
+        dong.append(f"⏸ Tạm dừng vì gói Claude hết lượt, tự thử lại lúc {datetime.fromtimestamp(TAM_DUNG['den']):%H:%M}. Có lượt sớm hơn thì gõ /tieptuc.")
     if CHAY:
         dong.append(f"⏳ {CHAY['ai']} đang làm: {CHAY['viec']} · {phut_giay(time.time() - CHAY['bat_dau'])}")
         dong.append(f"› {CHAY['buoc']}" + (f" (bước {CHAY['so_buoc']})" if CHAY['so_buoc'] else ""))
@@ -595,6 +620,9 @@ def dung_het():
         except queue.Empty:
             break
     CHO.clear()
+    THE_HE[0] += 1
+    TAM_DUNG["den"] = 0
+    GOM["ds"], GOM["msg"] = [], None
     return n, bo
 
 
@@ -771,12 +799,12 @@ def mo_ta_viec(n, dau_vao):
     return (goc[0] if goc else "việc theo nhiệm vụ")[:90]
 
 
-def xep_viec(nid, dau_vao="", nguon="lich"):
+def xep_viec(nid, dau_vao="", nguon="lich", so=""):
     n = NV(nid) or {}
-    xep(lambda: chay_nv(nid, dau_vao, nguon), n.get("ten", nid), mo_ta_viec(n, dau_vao))
+    xep(lambda: chay_nv(nid, dau_vao, nguon, so), n.get("ten", nid) + (f" ({so})" if so else ""), mo_ta_viec(n, dau_vao))
 
 
-def chay_nv(nid, dau_vao="", nguon="lich"):
+def chay_nv(nid, dau_vao="", nguon="lich", so=""):
     c, n = cfg(), NV(nid)
     if not c or not n:
         return
@@ -786,7 +814,7 @@ def chay_nv(nid, dau_vao="", nguon="lich"):
     DANG_LAM[nid] = time.time()
     viec = mo_ta_viec(n, dau_vao)
     su_kien("bắt đầu làm việc" + (" (sếp gọi thẳng)" if nguon == "sep" else ""), n["ten"])
-    td = TienDo(n["ten"], viec)
+    td = TienDo(n["ten"] + (f" · việc {so}" if so else ""), viec)
     try:
         chinh = bo_nao(n["model"])
         try:
@@ -804,6 +832,10 @@ def chay_nv(nid, dau_vao="", nguon="lich"):
         td.xong("⛔ đã dừng theo lệnh sếp")
         su_kien("đã dừng theo lệnh sếp", n["ten"]); return
     except Exception as e:
+        if "hết lượt" in str(e):                    # giữ việc lại, thợ làm việc tạm dừng cả hàng tới khi có lượt
+            td.xong("⏸ tạm dừng: gói Claude hết lượt, việc được giữ lại")
+            su_kien("tạm dừng vì hết lượt Claude, việc được giữ lại", n["ten"], "loi")
+            return "het_luot"
         td.xong("⚠️ lỗi, việc chưa xong")
         su_kien(f"lỗi: {str(e)[:160]}", n["ten"], "loi")
         gui(f"⚠️ {n['ten']} bị lỗi, việc chưa xong.\n{str(e)[-300:]}\n\nLỗi lạ thì bấm 🐞 Gửi lỗi trên bảng điều khiển, Linh ở toihocai.com sẽ xem giúp.", ai="💼 CEO")
@@ -846,7 +878,7 @@ class TienDo:
         dong = [f"{'⏳' if not cuoi else ''} {self.ten}: {self.viec}".strip()]
         if cuoi:
             dong.append(f"{cuoi} · {phut_giay(time.time() - self.bd)}")
-        elif CHAY.get("ai") == self.ten:
+        elif CHAY.get("ai") and self.ten.startswith(CHAY["ai"]):
             dong.append(f"› {CHAY['buoc']}" + (f" (bước {CHAY['so_buoc']})" if CHAY.get("so_buoc") else "") + f" · {phut_giay(time.time() - self.bd)}")
         else:
             dong.append("› đang chờ tới lượt")
@@ -876,8 +908,19 @@ def tho_lam_viec():
         viec, ten = HANG.get()
         if CHO:
             CHO.popleft()
+        the_he = THE_HE[0]
         try:
-            viec()
+            while the_he == THE_HE[0]:
+                while TAM_DUNG["den"] and time.time() < TAM_DUNG["den"] and the_he == THE_HE[0]:
+                    time.sleep(5)                     # hết lượt: giữ cả hàng, chờ tới giờ thử lại hoặc /tieptuc
+                if the_he != THE_HE[0]:
+                    break                             # sếp bấm dừng lúc đang giữ: bỏ việc này
+                TAM_DUNG["den"] = 0
+                if viec() != "het_luot":
+                    break
+                TAM_DUNG["den"] = time.time() + 30 * 60
+                gui(f"⏸ Gói Claude hết lượt. Em giữ lại {1 + len(CHO)} việc, không bỏ việc nào.\n"
+                    f"Tự thử lại lúc {datetime.fromtimestamp(TAM_DUNG['den']):%H:%M}. Có lượt sớm hơn thì gõ /tieptuc, muốn bỏ hết thì /dung.", ai="💼 CEO")
         except Exception:
             su_kien("Lỗi: " + traceback.format_exc()[-200:], "Hệ thống", "loi")
         finally:
@@ -932,7 +975,7 @@ Thư Ký giữ khay việc, Kế Toán ghi sổ thu chi bằng /thu /chi.
 
 === CÁCH TRẢ LỜI ===
 - Trả lời ngắn (2–8 dòng), dễ đọc trên điện thoại, không bảng markdown, không ** **.
-- Nếu {c['sep']} muốn giao việc: trình kế hoạch ngắn (ai làm, ra cái gì) rồi thêm ở CUỐI tối đa 2 dòng đúng mẫu:
+- Nếu {c['sep']} muốn giao việc: trình kế hoạch ngắn, đánh số từng việc (ai làm, ra cái gì) rồi thêm ở CUỐI mỗi việc 1 dòng đúng mẫu (tối đa {MAX_KE_HOACH} dòng, {c['sep']} giao nhiều việc trong 1 tin thì tách đủ từng việc, không gộp, không bỏ việc nào):
 LỆNH: /<lệnh nhân viên> <việc cần làm, viết đủ ý>
 - Có LỆNH thì việc CHƯA chạy, chờ {c['sep']} bấm duyệt. Đừng nói "đã giao", "đang làm".
 - Muốn lấy việc trong khay ra ngay: LỆNH: /khay   ·  Muốn dừng mọi việc: LỆNH: /dung  (2 lệnh này chạy luôn).
@@ -953,7 +996,7 @@ LỆNH: /<lệnh nhân viên> <việc cần làm, viết đủ ý>
     tra_loi = "\n".join(l for l in ra.splitlines() if not l.strip().upper().startswith("LỆNH:")).strip()
     LICH_SU.append(f"CEO: {tra_loi[:300]}")
     viec = []
-    for l in lenh[:2]:
+    for l in lenh[:MAX_KE_HOACH]:
         dau = l.split()[0].lower() if l.split() else ""
         if dau in ("/khay", "/dung"):
             gui(tra_loi, ai="💼 CEO"); xu_ly_lenh(l); return
@@ -963,7 +1006,12 @@ LỆNH: /<lệnh nhân viên> <việc cần làm, viết đủ ý>
     if viec:
         kid = str(random.randint(10000, 99999))
         KE_HOACH[kid] = viec
-        gui(tra_loi, nut=[[("✅ Làm đi", f"kh:{kid}:lam"), ("❌ Thôi", f"kh:{kid}:thoi")]], ai="💼 CEO")
+        if len(lenh) > MAX_KE_HOACH:
+            tra_loi += f"\n\n⚠️ Mỗi lần em nhận tối đa {MAX_KE_HOACH} việc. {len(lenh) - MAX_KE_HOACH} việc sau sếp gửi lại sau nhé."
+        if len(viec) >= 4:
+            tra_loi += (f"\n\n{len(viec)} việc sẽ chạy lần lượt từng việc, tốn khá nhiều lượt Claude. "
+                        "Gói Pro dễ hết lượt giữa chừng, hết thì em giữ việc lại chờ có lượt. Chia sáng chiều thì đỡ hơn.")
+        gui(tra_loi, nut=[[(f"✅ Làm hết ({len(viec)} việc)" if len(viec) > 1 else "✅ Làm đi", f"kh:{kid}:lam"), ("❌ Thôi", f"kh:{kid}:thoi")]], ai="💼 CEO")
     else:
         gui(tra_loi, ai="💼 CEO")
     su_kien("trả lời " + c["sep"], "CEO")
