@@ -27,7 +27,7 @@ Bộ cài này **miễn phí**. Nếu bạn phải trả tiền để có nó, b
 | Bạn muốn | Làm thế nào |
 |---|---|
 | Thêm nhân viên | Bấm dấu **+** trong một phòng trên bảng điều khiển, chọn mẫu, sửa nhiệm vụ, bật lên |
-| Giao việc | Nhắn bình thường vào nhóm Telegram, CEO trình kế hoạch, bạn bấm ✅ Làm đi |
+| Giao việc | Nhắn bình thường cho bot Telegram (hoặc nhóm đã nối), CEO trình kế hoạch, bạn bấm ✅ Làm đi |
 | Gọi thẳng 1 nhân viên | `/tên-nhân-viên việc`, ví dụ `/content viết bài áo khoác gió` |
 | Nối việc giữa nhân viên | Trong bảng nhân viên, chọn **Làm xong chuyển cho** |
 | Nhận việc đúng giờ | Thư Ký đưa việc vào các mốc khay (mặc định 06:30, 11:30, 20:00, 21:30), mỗi lần 1 việc |

@@ -37,7 +37,7 @@ F_ENV = os.path.join(BASE, ".env")
 
 KHOA = threading.RLock()
 BAN_QUYEN = "© 2026 Phạm Linh · toihocai.com · bản phát hành miễn phí"
-PHIEN_BAN = "1.2.0"
+PHIEN_BAN = "1.2.1"
 CHAN_TRANG = ('<div class="nguon-tu-dong" style="position:fixed;right:12px;bottom:10px;z-index:30;font:500 11.5px system-ui,sans-serif;'
               'color:#8a92c4;background:rgba(7,8,20,.75);padding:3px 9px;border-radius:999px">Văn Phòng AI · ' + BAN_QUYEN + '</div>')
 
@@ -334,14 +334,25 @@ def xu_ly_update(u):
     if not chu:
         return
     lenh = chu.split()[0].split("@")[0].lower()
+    tham_so = chu.split()[1:2]
+    if lenh == "/start" and tham_so and tham_so[0].startswith("ketnoi_"):   # bấm nút trên bảng điều khiển: t.me/bot?start=ketnoi_<mã>
+        lenh, tham_so = "/ketnoi", [tham_so[0][7:]]
     if lenh == "/ketnoi":
         if ENV.get("TG_CHAT_ID"):
             return
-        if chu.split()[1:2] == [MA_KET_NOI]:
+        if tham_so == [MA_KET_NOI]:
             ghi_env(TG_CHAT_ID=chat, TG_ADMIN_ID=nguoi)
             c = cfg() or {}
             su_kien("Đã nối Telegram với nhóm làm việc", "Hệ thống")
             gui(f"Đã nối xong! Từ giờ {c.get('sep', 'sếp')} nhắn ở đây là CEO nghe.\nGõ /trogiup để xem lệnh.\n\nVăn Phòng AI · {BAN_QUYEN}", ai="💼 CEO")
+            if m.get("chat", {}).get("type") in ("group", "supergroup"):
+                try:                                    # trong nhóm, bot phải là quản trị viên mới đọc được tin thường
+                    toi = tg("getMe")["result"]["id"]
+                    if tg("getChatMember", {"chat_id": chat, "user_id": toi})["result"]["status"] != "administrator":
+                        gui("⚠️ Còn 1 bước: cho bot làm quản trị viên của nhóm này, không thì CEO chỉ nghe được lệnh có dấu /.\n"
+                            "Bấm tên nhóm → Chỉnh sửa (cây bút) → Quản trị viên → Thêm quản trị viên → chọn bot → Lưu.", ai="💼 CEO")
+                except Exception:
+                    pass
         else:
             tg("sendMessage", {"chat_id": chat, "text": "Mã kết nối chưa đúng. Xem mã trên bảng điều khiển."})
         return

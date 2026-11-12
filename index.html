@@ -689,7 +689,7 @@ function veNganTelegram(b){
   ganTelegram(b);
 }
 function khoiTelegram(t){
-  if(t.daNoi)return `<div class="khoa"><b>Đã nối.</b> Nhắn trong nhóm là CEO nghe. Gõ /trogiup để xem lệnh.<br><br>Muốn đổi bot khác thì dán mã mới bên dưới, sau đó nối lại.</div>
+  if(t.daNoi)return `<div class="khoa"><b>Đã nối.</b> Nhắn cho bot (hoặc trong nhóm đã nối) là CEO nghe. Gõ /trogiup để xem lệnh.<br><br>Muốn đổi bot khác thì dán mã mới bên dưới, sau đó nối lại.</div>
     <div class="truong"><label for="tgMa">MÃ BOT MỚI</label><input class="o" id="tgMa" placeholder="123456789:AAH..." autocomplete="off"></div><div class="cuoi"><button class="nut" id="tgLuu">Đổi bot</button></div><p class="bao" id="tgBao"></p>`;
   if(!t.coToken)return `<div class="buoc-tg">
     <div><span>Mở Telegram, tìm <b>@BotFather</b> (có tích xanh), bấm Start.</span></div>
@@ -697,11 +697,16 @@ function khoiTelegram(t){
     <div><span>BotFather trả về một mã dài. Dán mã đó vào đây. Mã chỉ lưu trên máy bạn, trong file .env.</span></div></div>
     <div class="truong"><label for="tgMa">MÃ BOT</label><input class="o" id="tgMa" placeholder="123456789:AAH..." autocomplete="off"></div>
     <div class="cuoi"><button class="nut nut-cam" id="tgLuu">Kiểm tra mã</button></div><p class="bao" id="tgBao"></p>`;
+  const bot=encodeURIComponent(t.tenBot||""),ma=encodeURIComponent(t.maKetNoi||"");
   return `<div class="buoc-tg">
-    <div><span>Tạo 1 nhóm Telegram mới, thêm bot <b>@${esc(t.tenBot)}</b> vào nhóm và cho bot làm quản trị viên (để bot đọc được tin nhắn).</span></div>
-    <div><span>Gõ vào nhóm đúng dòng này:<br><span class="ma">/ketnoi ${esc(t.maKetNoi)}</span></span></div>
-    <div><span>Đợi vài giây, trang này tự báo đã nối. Chỉ người gửi dòng trên mới ra lệnh được cho văn phòng.</span></div></div>
-    <p class="bao" id="tgBao">Đang đợi tin nhắn kết nối…</p>`;
+    <div><span>Bấm nút dưới, Telegram mở ra cuộc trò chuyện với bot <b>@${esc(t.tenBot)}</b>. Bấm <b>Start</b> (Bắt đầu) là xong, không phải gõ gì.<br>
+      <a class="nut nut-cam" style="margin-top:8px;display:inline-flex" href="https://t.me/${bot}?start=ketnoi_${ma}" target="_blank" rel="noopener">📱 Mở Telegram, bấm Start</a></span></div>
+    <div><span>Đợi vài giây, trang này tự báo đã nối. Chỉ bạn, người bấm Start, mới ra lệnh được cho văn phòng.</span></div></div>
+    <details class="khoa" style="margin-top:6px"><summary>Muốn dùng nhóm Telegram cho nhiều người cùng xem?</summary>
+      <p style="margin:8px 0">Bấm nút này, chọn nhóm (hoặc tạo nhóm mới trước), Telegram tự thêm bot vào và nối luôn. Nhớ cho bot làm quản trị viên để CEO đọc được tin nhắn thường.</p>
+      <a class="nut" href="https://t.me/${bot}?startgroup=ketnoi_${ma}&admin=pin_messages" target="_blank" rel="noopener">👥 Thêm bot vào nhóm</a>
+      <p style="margin:8px 0 0">Nút không mở được thì gõ tay vào nhóm hoặc vào chat với bot: <span class="ma">/ketnoi ${esc(t.maKetNoi)}</span></p></details>
+    <p class="bao" id="tgBao">Đang đợi bạn bấm Start…</p>`;
 }
 function ganTelegram(b){
   const nut=b.querySelector("#tgLuu");if(!nut)return;
