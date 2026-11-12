@@ -67,6 +67,9 @@ aside{border-right:1px solid var(--line);padding:14px 12px;overflow:auto;backgro
 .pill{font:700 11px var(--so);padding:2px 7px;border-radius:999px;background:color-mix(in srgb,var(--green) 18%,transparent);color:var(--green)}
 .rule{margin:16px 4px 0;padding:12px;border:1px solid color-mix(in srgb,var(--gold) 40%,transparent);border-radius:10px;background:color-mix(in srgb,var(--gold) 7%,transparent);font-size:12px;line-height:1.5}
 .rule b{color:var(--gold);display:block;margin-bottom:4px;font-size:11px;letter-spacing:.12em}
+.ban-quyen{display:block;text-decoration:none;color:var(--muted);border-color:var(--line);background:transparent}
+.ban-quyen b{color:var(--text);font-size:13px;letter-spacing:.02em;margin-bottom:2px}
+.ban-quyen:hover{border-color:var(--accent)}
 
 /* giữa */
 main{position:relative;overflow:hidden;display:flex;flex-direction:column;min-width:0}
@@ -334,7 +337,7 @@ function veAside(){
   <button class="side-item" data-mo="tg"><span class="d" style="background:${tg.daNoi?"#29b6f6":"var(--pink)"}"></span><span class="t">Telegram</span><span class="tag">${tg.daNoi?"đã nối":"chưa nối"}</span></button>
   <div class="side-h">MÁY CHỦ</div>
   <button class="side-item" data-mo="may"><span class="d" style="background:var(--green);box-shadow:0 0 8px var(--green)"></span><span class="t">⚡ Máy chủ</span><span class="pill">24/7</span></button>
-  <div class="rule"><b>NGUYÊN TẮC</b>AI soạn, ${esc(S.sep)} quyết. Đăng bài, nhắn khách, chi tiền đều phải qua bàn duyệt.</div>`;
+  <a class="rule ban-quyen" href="https://toihocai.com/van-phong-ai/" target="_blank" rel="noopener"><b>toihocai.com</b>Tối học AI</a>`;
   const a=$("#aside");a.innerHTML=h;
   a.querySelectorAll("[data-nv]").forEach(b=>b.onclick=()=>moNgan({loai:"nv",id:b.dataset.nv}));
   a.querySelectorAll("[data-them]").forEach(b=>b.onclick=()=>moNgan({loai:"moi",phong:b.dataset.them}));
