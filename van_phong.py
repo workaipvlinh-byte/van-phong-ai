@@ -37,7 +37,7 @@ F_ENV = os.path.join(BASE, ".env")
 
 KHOA = threading.RLock()
 BAN_QUYEN = "© 2026 Phạm Linh · toihocai.com · bản phát hành miễn phí"
-PHIEN_BAN = "1.2.1"
+PHIEN_BAN = "1.3.0"
 CHAN_TRANG = ('<div class="nguon-tu-dong" style="position:fixed;right:12px;bottom:10px;z-index:30;font:500 11.5px system-ui,sans-serif;'
               'color:#8a92c4;background:rgba(7,8,20,.75);padding:3px 9px;border-radius:999px">Văn Phòng AI · ' + BAN_QUYEN + '</div>')
 
@@ -274,12 +274,43 @@ def tg(phuong_thuc, tham_so=None, timeout=40, token=None):
         return json.loads(r.read().decode("utf-8"))
 
 
+# ---------------- bot riêng cho từng nhân viên ----------------
+# Mỗi nhân viên (trừ CEO, CEO dùng bot chính TG_TOKEN) có thể có bot riêng, lưu trong .env:
+#   BOT_<TÊN VIẾT LIỀN KHÔNG DẤU, IN HOA>=<mã bot>      vd BOT_CONTENT=123:ABC, BOT_THUKY=456:DEF
+# Bot riêng chỉ để gửi tin (có tên, ảnh riêng) và nhận nút bấm trên tin của nó. Nghe lệnh vẫn là bot chính.
+BOT_TEN = {}                                         # mã bot -> username, điền dần khi kiểm tra
+
+
+def khoa_bot(ten):
+    return "BOT_" + go_tat(ten)[1:].upper()
+
+
+def la_nhom():
+    return ENV.get("TG_CHAT_ID", "").startswith("-")  # nhóm có mã âm; chat riêng thì bot phụ không gửi được vào
+
+
+def ma_bot_nv(n):
+    if not n or n.get("cung") == "ceo":
+        return ""
+    return ENV.get(khoa_bot(n.get("ten", ""))) or ""
+
+
+def nv_theo_nhan(ai):
+    """'🗂 Thư Ký' / '🤖 Content' -> nhân viên tương ứng (bỏ biểu tượng đầu)."""
+    if not ai:
+        return None
+    ten = ai.split(" ", 1)[1] if " " in ai and not ai[0].isalnum() else ai
+    return next((n for n in (cfg() or {}).get("nv", []) if n["ten"] == ten), None)
+
+
 def gui(chu, nut=None, ai=None):
-    """Gửi tin vào nhóm làm việc. Tên nhân viên đứng đầu tin. nut = [[(chữ, mã), ...], ...]."""
+    """Gửi tin vào nhóm làm việc. Tên nhân viên đứng đầu tin. nut = [[(chữ, mã), ...], ...].
+    Nhân viên có bot riêng (và văn phòng nối bằng nhóm) thì gửi bằng bot đó, khỏi ghi tên đầu tin."""
     if not ENV.get("TG_TOKEN") or not ENV.get("TG_CHAT_ID"):
         su_kien("(chưa nối Telegram) " + chu[:120], ai or "")
         return None
-    dau = f"{ai}\n" if ai else ""
+    rieng = ma_bot_nv(nv_theo_nhan(ai)) if la_nhom() else ""
+    dau = "" if rieng else (f"{ai}\n" if ai else "")
     phan = [chu[i:i + 3800] for i in range(0, len(chu), 3800)] or [""]
     r = None
     for i, p in enumerate(phan):
@@ -289,9 +320,17 @@ def gui(chu, nut=None, ai=None):
         if 22 <= bay_gio().hour or bay_gio().hour < 6:
             ts["disable_notification"] = "true"          # khuya thì gửi im lặng
         try:
-            r = tg("sendMessage", ts)
+            r = tg("sendMessage", ts, token=rieng or None)
         except Exception as e:
-            su_kien(f"Gửi Telegram lỗi: {e}", "Hệ thống", "loi")
+            if rieng:                                  # bot riêng chưa vào nhóm / bị chặn: gửi bằng bot chính cho khỏi mất tin
+                su_kien(f"Bot riêng của {ai} chưa gửi được ({str(e)[:80]}), gửi tạm bằng bot chính. Thêm bot đó vào nhóm nhé.", "Hệ thống", "loi")
+                ts["text"] = (f"{ai}\n" if ai and i == 0 else "") + p
+                try:
+                    r = tg("sendMessage", ts)
+                except Exception as e2:
+                    su_kien(f"Gửi Telegram lỗi: {e2}", "Hệ thống", "loi")
+            else:
+                su_kien(f"Gửi Telegram lỗi: {e}", "Hệ thống", "loi")
     return r
 
 
@@ -316,17 +355,50 @@ def vong_telegram():
             time.sleep(5)
 
 
-def xu_ly_update(u):
+def vong_bot_phu():
+    """Mỗi bot riêng một luồng nghe nút bấm (✅ Xong, ⏭ Để mai...) trên tin nó đã gửi. Tự thêm/bớt theo .env."""
+    dang = {}
+    def nghe(ma):
+        offset = 0
+        while ma in dang:
+            try:
+                r = tg("getUpdates", {"timeout": 30, "offset": offset, "allowed_updates": json.dumps(["callback_query"])}, timeout=45, token=ma)
+                for u in r.get("result", []):
+                    offset = u["update_id"] + 1
+                    if "callback_query" in u:
+                        try:
+                            xu_ly_update(u, token=ma)
+                        except Exception:
+                            su_kien("Lỗi xử lý nút bấm: " + traceback.format_exc()[-200:], "Hệ thống", "loi")
+            except Exception:
+                time.sleep(10)
+    while True:
+        can = {v for k, v in ENV.items() if k.startswith("BOT_") and v and v != ENV.get("TG_TOKEN")}
+        for ma in can - set(dang):
+            dang[ma] = threading.Thread(target=nghe, args=(ma,), daemon=True)
+            dang[ma].start()
+            try:
+                BOT_TEN[ma] = tg("getMe", token=ma, timeout=15)["result"].get("username", "")
+            except Exception:
+                pass
+        for ma in set(dang) - can:
+            dang.pop(ma, None)
+        time.sleep(10)
+
+
+def xu_ly_update(u, token=None):
     if "callback_query" in u:
         q = u["callback_query"]
         if str(q["from"]["id"]) != ENV.get("TG_ADMIN_ID") or str(q["message"]["chat"]["id"]) != ENV.get("TG_CHAT_ID"):
-            return tg("answerCallbackQuery", {"callback_query_id": q["id"], "text": "Chỉ sếp mới bấm được"})
+            return tg("answerCallbackQuery", {"callback_query_id": q["id"], "text": "Chỉ sếp mới bấm được"}, token=token)
         tra_loi = bam_nut(q.get("data", ""))
         try:
-            tg("answerCallbackQuery", {"callback_query_id": q["id"], "text": tra_loi or "Ok"})
-            tg("editMessageReplyMarkup", {"chat_id": ENV["TG_CHAT_ID"], "message_id": q["message"]["message_id"], "reply_markup": json.dumps({"inline_keyboard": []})})
+            tg("answerCallbackQuery", {"callback_query_id": q["id"], "text": tra_loi or "Ok"}, token=token)
+            tg("editMessageReplyMarkup", {"chat_id": ENV["TG_CHAT_ID"], "message_id": q["message"]["message_id"], "reply_markup": json.dumps({"inline_keyboard": []})}, token=token)
         except Exception:
             pass
+        return
+    if token:                                         # bot phụ chỉ lo nút bấm, lệnh vẫn do bot chính nghe
         return
     m = u.get("message") or {}
     chu = (m.get("text") or "").strip()
@@ -991,7 +1063,9 @@ def trang_thai():
         "so": {"thu": thu, "chi": chi, "ds": doc_so()[-40:]},
         "telegram": {"coToken": bool(ENV.get("TG_TOKEN")), "daNoi": bool(ENV.get("TG_CHAT_ID")),
                      "maKetNoi": "" if ENV.get("TG_CHAT_ID") else MA_KET_NOI, "tenBot": ENV.get("TG_BOT_TEN", "")},
-        "claude": claude_trang_thai(), "phienBan": PHIEN_BAN, "brain": doc_brain(20000),
+        "claude": claude_trang_thai(), "phienBan": PHIEN_BAN,
+        "botRieng": {n["id"]: BOT_TEN.get(ma_bot_nv(n), "") or "đang kiểm tra" for n in (c or {}).get("nv", []) if ma_bot_nv(n)},
+        "laNhom": la_nhom(), "brain": doc_brain(20000),
     }
 
 
@@ -1045,6 +1119,10 @@ class Web(BaseHTTPRequestHandler):
             if duong == "/api/luu":
                 moi = lam_sach_cfg(body)
                 cu = cfg()
+                for n in moi["nv"]:                     # đổi tên nhân viên thì mã bot riêng đi theo
+                    old = next((x for x in (cu or {}).get("nv", []) if x["id"] == n["id"]), None)
+                    if old and khoa_bot(old["ten"]) != khoa_bot(n["ten"]) and ENV.get(khoa_bot(old["ten"])) and not ENV.get(khoa_bot(n["ten"])):
+                        ghi_env(**{khoa_bot(n["ten"]): ENV[khoa_bot(old["ten"])], khoa_bot(old["ten"]): ""})
                 with KHOA:
                     ghi_json(F_CFG, moi)
                 if not cu:
@@ -1075,6 +1153,34 @@ class Web(BaseHTTPRequestHandler):
                 ghi_env(TG_TOKEN=token, TG_BOT_TEN=me.get("username", ""), TG_CHAT_ID="", TG_ADMIN_ID="")
                 su_kien(f"Đã nhận bot @{me.get('username')}", "Hệ thống")
                 return self.tra(200, {"ok": True, "tenBot": me.get("username"), "maKetNoi": MA_KET_NOI})
+            if duong == "/api/bot":                     # gắn / bỏ bot riêng cho 1 nhân viên
+                n = NV(str(body.get("id")))
+                if not n or n.get("cung") == "ceo":
+                    return self.tra(400, {"loi": "CEO dùng bot chính ở mục Telegram"})
+                token = str(body.get("token") or "").strip()
+                if not token:
+                    ghi_env(**{khoa_bot(n["ten"]): ""})
+                    su_kien(f"Bỏ bot riêng của {n['ten']}, nói qua bot chung", "Hệ thống")
+                    return self.tra(200, {"ok": True})
+                if not re.match(r"^\d{5,15}:[A-Za-z0-9_-]{30,60}$", token):
+                    return self.tra(400, {"loi": "Mã bot không đúng dạng. Mã trông như 123456789:AAH..."})
+                if token == ENV.get("TG_TOKEN") or any(v == token for k, v in ENV.items() if k.startswith("BOT_") and k != khoa_bot(n["ten"])):
+                    return self.tra(400, {"loi": "Mã này đang dùng cho bot khác. Mỗi nhân viên cần 1 bot riêng, tạo thêm qua BotFather."})
+                try:
+                    me = tg("getMe", token=token, timeout=15)["result"]
+                except Exception:
+                    return self.tra(400, {"loi": "Telegram không nhận mã này. Kiểm tra lại, hoặc máy chưa có mạng."})
+                ghi_env(**{khoa_bot(n["ten"]): token})
+                BOT_TEN[token] = me.get("username", "")
+                trong_nhom = False
+                if la_nhom():
+                    try:
+                        tg("getChat", {"chat_id": ENV["TG_CHAT_ID"]}, token=token, timeout=15)
+                        trong_nhom = True
+                    except Exception:
+                        pass
+                su_kien(f"{n['ten']} có bot riêng @{me.get('username')}", "Hệ thống")
+                return self.tra(200, {"ok": True, "tenBot": me.get("username"), "trongNhom": trong_nhom, "laNhom": la_nhom()})
             if duong == "/api/brain":
                 with open(os.path.join(BRAIN, "00-ve-chu.md"), "w", encoding="utf-8") as f:
                     f.write(str(body.get("chu") or "")[:20000])
@@ -1120,7 +1226,7 @@ def main():
         return
     mau_brain()
     nap_su_kien()
-    for t in (tho_lam_viec, vong_telegram, vong_lich):
+    for t in (tho_lam_viec, vong_telegram, vong_lich, vong_bot_phu):
         threading.Thread(target=t, daemon=True).start()
     srv = ThreadingHTTPServer((HOST, PORT), Web)
     print(f"\n  Văn Phòng AI · {BAN_QUYEN}\n  Đang chạy: http://localhost:{PORT}\n  Đóng cửa sổ này là văn phòng nghỉ.\n", flush=True)

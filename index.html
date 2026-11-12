@@ -635,6 +635,7 @@ function veNganNV(b,moi){
     h+=`<div class="truong"><span class="nhan">BỘ NÃO</span>${chonBoNao("model",boNao(n.model))}</div>
     <div class="khoa">🔒 <b>An toàn mặc định:</b> nhân viên chỉ đọc web và làm việc trong thư mục văn phòng. Không chạy lệnh trên máy, không xoá file, không tự đăng bài. Bài nào cũng chờ ${esc(S.sep)} duyệt.</div>`;
   }
+  h+=khoiBotRieng(n,moi);
   h+=`<div class="cuoi">${moi?'<button class="nut nut-cam" id="nLuu">Thêm vào văn phòng</button><button class="nut" id="nHuy">Huỷ</button>':(n.cung?"":'<button class="nut xoa" id="nXoa">Cho nghỉ việc</button>')+(!moi&&n.bat&&!n.cung?'<button class="nut" id="nChay">▶ Chạy thử ngay</button>':"")}</div><p class="bao loi" id="nBao"></p>`;
   b.innerHTML=h;
   const live=()=>{if(!moi){save();veSan();veAside();veStats()}};
@@ -648,6 +649,7 @@ function veNganNV(b,moi){
   b.querySelectorAll("[data-thu]").forEach(x=>x.onclick=()=>{const i=+x.dataset.thu,t=n.lich.thu||(n.lich.thu=[]);t.includes(i)?t.splice(t.indexOf(i),1):t.push(i);live();veNgan()});
   b.querySelectorAll("[data-gui]").forEach(x=>x.onclick=()=>{n.gui=x.dataset.gui;live();veNgan()});
   b.querySelectorAll("[data-model]").forEach(x=>x.onclick=()=>{n.model=x.dataset.model;live();veNgan()});
+  ganBotRieng(b,n);
   if($("#nChuyen"))$("#nChuyen").onchange=e=>{n.chuyen=e.target.value;const m=NV(n.chuyen);if(m&&m.lich&&!["gio","tuan"].includes(m.lich.kieu))m.lich.kieu="giao";live();veNgan()};
   b.querySelectorAll(".khoa [data-mo]").forEach(x=>x.onclick=()=>moNgan({loai:"nv",id:x.dataset.mo}));
   b.querySelectorAll("[data-xg]").forEach(x=>x.onclick=()=>{if(S.khayGio.length<2)return;S.khayGio.splice(+x.dataset.xg,1);save();veNgan();veStats();veAside()});
@@ -659,6 +661,34 @@ function veNganNV(b,moi){
   if($("#nHuy"))$("#nHuy").onclick=dongNgan;
   if($("#nXoa"))$("#nXoa").onclick=e=>{if(!e.target.dataset.chac){e.target.dataset.chac=1;e.target.textContent="Bấm lần nữa để cho nghỉ";return}S.nv=S.nv.filter(x=>x.id!==n.id);S.nv.forEach(x=>{if(x.chuyen===n.id)x.chuyen=""});save();pushTick(`<b>${esc(n.ten)}</b> nghỉ việc`);dongNgan();veTatCa()};
   if($("#nChay"))$("#nChay").onclick=()=>chayThu(n);
+}
+/* Bot Telegram riêng cho từng nhân viên: tên, ảnh riêng trong nhóm. Mã bot lưu trong .env, không nằm ở đây. */
+function khoiBotRieng(n,moi){
+  if(n.cung==="ceo")return `<div class="khoa"><b>Bot Telegram:</b> CEO dùng bot chính ở mục <b>Telegram</b> cột trái.</div>`;
+  if(moi)return `<div class="khoa"><b>Bot Telegram riêng:</b> thêm nhân viên xong, mở lại nhân viên này để gắn bot riêng.</div>`;
+  const ten=LIVE&&TT&&TT.botRieng?TT.botRieng[n.id]:"",nhom=LIVE&&TT?TT.laNhom:true,khoa="BOT_"+goTat(n.ten).slice(1).toUpperCase();
+  const canhBao=nhom?"":`<p class="bao loi" style="margin:6px 0">Văn phòng đang nối bằng chat riêng nên bot riêng chưa dùng được, nhân viên vẫn nói qua bot chung. Muốn mỗi người một bot thì nối văn phòng vào một nhóm (mục Telegram).</p>`;
+  const chua=ten==="đang kiểm tra";
+  if(ten)return `<div class="truong"><span class="nhan">BOT TELEGRAM RIÊNG</span><div class="khoa">✅ ${esc(n.ten)} đang nói bằng bot riêng <b>${chua?"(đang hỏi Telegram tên bot…)":"@"+esc(ten)}</b>.<br>
+    ${chua?"":`<a class="nut" style="margin-top:8px;display:inline-flex" href="https://t.me/${encodeURIComponent(ten)}?startgroup=vanphong" target="_blank" rel="noopener">👥 Thêm @${esc(ten)} vào nhóm</a>`}
+    <button class="nut xoa" type="button" id="brBo" style="margin-top:8px">Bỏ bot riêng</button><br>
+    <small>Đổi ảnh, tên hiển thị: nhắn @BotFather lệnh <code>/setuserpic</code>, <code>/setname</code>.</small></div>${canhBao}<p class="bao" id="brBao"></p></div>`;
+  return `<div class="truong"><span class="nhan">BOT TELEGRAM RIÊNG (KHÔNG BẮT BUỘC)</span>
+    <small>Để trống thì ${esc(n.ten)} nói qua bot chung, có tên đứng đầu tin. Gắn bot riêng thì trong nhóm ${esc(n.ten)} có tên, ảnh riêng như một người thật.</small>
+    <div class="buoc-tg" style="margin-top:8px"><div><span>Nhắn <b>@BotFather</b> lệnh <code>/newbot</code>, đặt tên giống nhân viên, vd "${esc(n.ten)} ${esc(S.cty)}".</span></div>
+    <div><span>Dán mã BotFather trả về vào ô dưới, bấm <b>Gắn bot</b>.</span></div><div><span>Thêm bot đó vào nhóm làm việc. Không cần cho làm quản trị viên.</span></div></div>
+    <input class="o" id="brMa" placeholder="123456789:AAH..." autocomplete="off"><div class="cuoi"><button class="nut nut-cam" type="button" id="brGan">Gắn bot</button></div>
+    <small>Mã lưu trong file .env, dòng <code>${esc(khoa)}=</code>. Thích sửa file thì dán mã vào dòng đó rồi mở lại văn phòng cũng được.</small>${canhBao}<p class="bao" id="brBao"></p></div>`;
+}
+function ganBotRieng(b,n){
+  const bao=b.querySelector("#brBao");
+  const gan=async token=>{if(!LIVE){bao.className="bao";bao.textContent="Bản xem thử: không gắn bot thật";return}
+    bao.className="bao";bao.textContent="Đang kiểm tra…";
+    try{const j=await api("/api/bot",{id:n.id,token});await keoTrangThai();veNgan();
+      const b2=$("#brBao");if(b2&&token){b2.className=j.trongNhom||!j.laNhom?"bao ok":"bao loi";b2.textContent=j.trongNhom?"Đã gắn @"+j.tenBot+", bot đã ở trong nhóm.":j.laNhom?"Đã gắn @"+j.tenBot+". Còn 1 bước: bấm nút Thêm vào nhóm ở trên.":"Đã gắn @"+j.tenBot+"."}}
+    catch(e){bao.className="bao loi";bao.textContent=e.message}};
+  const g=b.querySelector("#brGan");if(g)g.onclick=()=>gan(b.querySelector("#brMa").value.trim());
+  const x=b.querySelector("#brBo");if(x)x.onclick=e=>{if(!e.target.dataset.chac){e.target.dataset.chac=1;e.target.textContent="Bấm lần nữa để bỏ";return}gan("")};
 }
 function veNganGopY(b){
   const g=ngan.nhap||(ngan.nhap={loai:"loi",noi_dung:"",lien_he:"",kem:true});
@@ -784,7 +814,7 @@ let lamTruoc="";
 async function keoTrangThai(){
   try{TT=await api("/api/trangthai")}catch(e){$("#badge").textContent="Mất kết nối máy chủ · mở lại cửa sổ văn phòng";$("#badge").hidden=false;return}
   $("#badge").hidden=true;
-  const moi=TT.lam.sort().join(",")+"|"+TT.telegram.daNoi+"|"+TT.claude+"|"+choDuyet();lam.clear();TT.lam.forEach(x=>lam.add(x));
+  const moi=TT.lam.sort().join(",")+"|"+TT.telegram.daNoi+"|"+TT.claude+"|"+choDuyet()+"|"+JSON.stringify(TT.botRieng||{});lam.clear();TT.lam.forEach(x=>lam.add(x));
   ticks=TT.suKien.slice().reverse().slice(0,8).map(e=>`<span>${e.t.slice(11,16)} · ${e.ai?`<b>${esc(e.ai)}</b> `:""}${esc(e.chu)}</span>`);$("#tick").innerHTML=ticks.join("");
   if(moi!==lamTruoc){lamTruoc=moi;veSan()}
   veStats();if(!document.activeElement||!$("#aside").contains(document.activeElement))veAside();

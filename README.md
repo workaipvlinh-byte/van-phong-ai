@@ -70,6 +70,10 @@ data/               cấu hình, khay việc, sổ thu chi, nhật ký (tự t�
 
 Dùng cá nhân và cho công việc của bạn thoải mái. Không bán lại. Xem file `LICENSE`.
 
+## Mỗi nhân viên một bot riêng (tuỳ chọn)
+
+Mặc định cả văn phòng dùng 1 bot. Muốn mỗi nhân viên có tên, ảnh riêng trong nhóm Telegram: tạo thêm bot qua @BotFather, bấm nhân viên trên bảng điều khiển > Bot Telegram riêng > dán mã. Hoặc thêm dòng `BOT_<TENNHANVIEN>=mã` vào `.env`. Chỉ chạy khi văn phòng nối bằng nhóm.
+
 ## Gặp lỗi, muốn góp ý
 
 Bấm **🐞 Gửi lỗi, góp ý** ở cột trái bảng điều khiển. Bạn xem trước toàn bộ nội dung, mã bot và mã bí mật luôn được che. Tin gửi thẳng tới Linh ở toihocai.com.
