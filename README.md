@@ -6,6 +6,8 @@ Bản khởi tạo này chỉ dựng phần móng: **CEO** nghe lệnh, **Thư K
 
 Hướng dẫn đầy đủ, có hình: series **Xây văn phòng AI** trên [toihocai.com](https://toihocai.com/van-phong-ai/).
 
+Bộ cài này **miễn phí**. Nếu bạn phải trả tiền để có nó, bản gốc luôn tải miễn phí tại [toihocai.com](https://toihocai.com/van-phong-ai/).
+
 ## Cần gì
 
 - Máy Windows 10/11 (macOS, Linux chạy bằng `chay.sh`).

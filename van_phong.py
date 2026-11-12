@@ -36,6 +36,9 @@ F_DACHAY = os.path.join(DATA, "lich-da-chay.json")
 F_ENV = os.path.join(BASE, ".env")
 
 KHOA = threading.RLock()
+BAN_QUYEN = "© 2026 Phạm Linh · toihocai.com · bản phát hành miễn phí"
+CHAN_TRANG = ('<div class="nguon-tu-dong" style="position:fixed;right:12px;bottom:10px;z-index:30;font:500 11.5px system-ui,sans-serif;'
+              'color:#8a92c4;background:rgba(7,8,20,.75);padding:3px 9px;border-radius:999px">Văn Phòng AI · ' + BAN_QUYEN + '</div>')
 
 
 # ---------------- cấu hình (.env) ----------------
@@ -287,7 +290,7 @@ def xu_ly_update(u):
             ghi_env(TG_CHAT_ID=chat, TG_ADMIN_ID=nguoi)
             c = cfg() or {}
             su_kien("Đã nối Telegram với nhóm làm việc", "Hệ thống")
-            gui(f"Đã nối xong! Từ giờ {c.get('sep', 'sếp')} nhắn ở đây là CEO nghe.\nGõ /trogiup để xem lệnh.", ai="💼 CEO")
+            gui(f"Đã nối xong! Từ giờ {c.get('sep', 'sếp')} nhắn ở đây là CEO nghe.\nGõ /trogiup để xem lệnh.\n\nVăn Phòng AI · {BAN_QUYEN}", ai="💼 CEO")
         else:
             tg("sendMessage", {"chat_id": chat, "text": "Mã kết nối chưa đúng. Xem mã trên bảng điều khiển."})
         return
@@ -306,7 +309,7 @@ TRO_GIUP = """Nhắn bình thường là CEO nghe và giao việc.
 /nho <điều cần nhớ>  ghi vào bộ não chung
 /<tên nhân viên> <việc>  gọi thẳng 1 nhân viên, vd /content viết bài áo khoác
 
-Văn Phòng AI · © 2026 Phạm Linh · toihocai.com · bản phát hành miễn phí"""
+"""
 
 
 def xu_ly_lenh(chu, tu_web=False):
@@ -316,7 +319,7 @@ def xu_ly_lenh(chu, tu_web=False):
     lenh = chu.split()[0].split("@")[0].lower()
     sau = chu[len(chu.split()[0]):].strip()
     if lenh in ("/start", "/trogiup", "/help"):
-        gui(TRO_GIUP, ai="💼 CEO"); return "ok"
+        gui(TRO_GIUP + "\n\nVăn Phòng AI · " + BAN_QUYEN, ai="💼 CEO"); return "ok"
     if lenh == "/dung":
         n, bo = dung_het()
         gui(f"⛔ Đã dừng {n} việc đang chạy, bỏ {bo} việc đang chờ.", ai="💼 CEO"); return "ok"
@@ -818,7 +821,7 @@ def kiem_tra():
     k = khay_hom_nay()
     d(True, "Khay hôm nay", f"xong {k['xong']}/{k['tong']}")
     ok = sum(l.startswith("✅") for l in dong)
-    return f"🩺 KHÁM SỨC KHOẺ VĂN PHÒNG · {ok}/{len(dong)} ổn\n" + "\n".join(dong)
+    return f"🩺 KHÁM SỨC KHOẺ VĂN PHÒNG · {ok}/{len(dong)} ổn\n" + "\n".join(dong) + f"\n\nVăn Phòng AI · {BAN_QUYEN}"
 
 
 # ---------------- lịch ----------------
@@ -894,7 +897,10 @@ class Web(BaseHTTPRequestHandler):
             return self.tra(403, {"loi": "host"})
         duong = urllib.parse.urlparse(self.path).path
         if duong in ("/", "/index.html"):
-            return self.tra(200, open(os.path.join(BASE, "index.html"), "rb").read(), "text/html; charset=utf-8")
+            html = open(os.path.join(BASE, "index.html"), encoding="utf-8").read()
+            if BAN_QUYEN not in html or 'class="nguon"' not in html:       # dòng nguồn bị xoá thì tự chèn lại
+                html = html.replace("</body>", CHAN_TRANG + "</body>") if "</body>" in html else html + CHAN_TRANG
+            return self.tra(200, html.encode("utf-8"), "text/html; charset=utf-8")
         if duong == "/api/trangthai":
             return self.tra(200, trang_thai())
         if duong == "/api/kiemtra":
@@ -981,10 +987,10 @@ def main():
     for t in (tho_lam_viec, vong_telegram, vong_lich):
         threading.Thread(target=t, daemon=True).start()
     srv = ThreadingHTTPServer((HOST, PORT), Web)
-    print(f"\n  Văn Phòng AI đang chạy: http://localhost:{PORT}\n  Đóng cửa sổ này là văn phòng nghỉ.\n", flush=True)
+    print(f"\n  Văn Phòng AI · {BAN_QUYEN}\n  Đang chạy: http://localhost:{PORT}\n  Đóng cửa sổ này là văn phòng nghỉ.\n", flush=True)
     if not CLAUDE:
         print("  ⚠ Chưa thấy Claude Code. Cài và đăng nhập Claude Code thì nhân viên mới làm việc được.\n", flush=True)
-    su_kien("Văn phòng mở cửa", "Hệ thống")
+    su_kien("Văn phòng mở cửa · " + BAN_QUYEN, "Hệ thống")
     srv.serve_forever()
 
 
