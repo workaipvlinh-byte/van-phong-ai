@@ -480,7 +480,10 @@ def xep_viec(nid, dau_vao="", nguon="lich"):
 
 def chay_nv(nid, dau_vao="", nguon="lich"):
     c, n = cfg(), NV(nid)
-    if not c or not n or not n["bat"]:
+    if not c or not n:
+        return
+    if not n["bat"]:
+        gui(f"{n['ten']} đang nghỉ nên chưa làm việc này. Bật {n['ten']} trên bảng điều khiển rồi giao lại nhé.", ai="💼 CEO")
         return
     DANG_LAM[nid] = time.time()
     su_kien("bắt đầu làm việc" + (" (sếp gọi thẳng)" if nguon == "sep" else ""), n["ten"])

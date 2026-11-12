@@ -737,7 +737,7 @@ let lamTruoc="";
 async function keoTrangThai(){
   try{TT=await api("/api/trangthai")}catch(e){$("#badge").textContent="Mất kết nối máy chủ · mở lại cửa sổ văn phòng";$("#badge").hidden=false;return}
   $("#badge").hidden=true;
-  const moi=TT.lam.sort().join(",");lam.clear();TT.lam.forEach(x=>lam.add(x));
+  const moi=TT.lam.sort().join(",")+"|"+TT.telegram.daNoi+"|"+TT.claude+"|"+choDuyet();lam.clear();TT.lam.forEach(x=>lam.add(x));
   ticks=TT.suKien.slice().reverse().slice(0,8).map(e=>`<span>${e.t.slice(11,16)} · ${e.ai?`<b>${esc(e.ai)}</b> `:""}${esc(e.chu)}</span>`);$("#tick").innerHTML=ticks.join("");
   if(moi!==lamTruoc){lamTruoc=moi;veSan()}
   veStats();if(!document.activeElement||!$("#aside").contains(document.activeElement))veAside();
