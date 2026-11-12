@@ -350,14 +350,14 @@ function viecKeTiep(){const now=new Date();let best=null;
 function veStats(){
   const bat=S.nv.filter(n=>n.bat).length,auto=S.nv.filter(n=>n.bat&&n.lich&&["gio","tuan"].includes(n.lich.kieu)).length;
   const kt=viecKeTiep(),phong=S.phong.filter(p=>!p.dacBiet).length,hm=new Date().toTimeString().slice(0,5),moc=S.khayGio.find(g=>g>hm)||S.khayGio[0];
-  const k=LIVE&&TT?TT.khay:{xong:1,tong:S.khayGio.length},may=LIVE&&TT?(TT.claude?"ON":"LỖI"):"ON";
+  const k=LIVE&&TT?TT.khay:{xong:1,tong:S.khayGio.length},may=LIVE&&TT?(TT.claude==="ok"?"ON":TT.claude==="chua_dang_nhap"?"LOGIN":"LỖI"):"ON";
   $("#stats").innerHTML=`
   <div class="stat" style="--c:var(--cyan)"><small>NHÂN SỰ AI</small><b>${S.nv.length}</b><span>${bat} đang làm · ${phong} phòng ban</span></div>
   <div class="stat" style="--c:var(--accent)"><small>AUTOPILOT</small><b>${auto}</b><span>việc AI tự làm theo lịch</span></div>
   <div class="stat" style="--c:var(--pink)"><small>VIỆC KẾ TIẾP</small><b>${kt?kt.dt.toTimeString().slice(0,5):"--:--"}</b><span>${kt?esc(kt.n.ten):"chưa có lịch nào"}</span></div>
   <div class="stat" style="--c:var(--gold)"><small>CHỜ DUYỆT</small><b>${choDuyet()}</b><span>việc chờ ${esc(S.sep)} bấm</span></div>
   <button class="stat" style="--c:var(--purple)" id="statKhay"><small>HÔM NAY ${esc(S.sep.toUpperCase())} LÀM GÌ 👀</small><b>${k.xong}/${k.tong}</b><span>mốc kế tiếp ${moc}</span></button>
-  <button class="stat" style="--c:var(--green)" id="statMay"><small>MÁY CHỦ</small><b>${may}</b><span>${may==="ON"?"chạy 24/7":"chưa thấy Claude Code"}</span></button>`;
+  <button class="stat" style="--c:var(--green)" id="statMay"><small>MÁY CHỦ</small><b>${may}</b><span>${may==="ON"?"chạy 24/7":may==="LOGIN"?"Claude chưa đăng nhập":"chưa thấy Claude Code"}</span></button>`;
   $("#statKhay").onclick=()=>moNgan({loai:"tongquan"});$("#statMay").onclick=()=>moNgan({loai:"may"});
 }
 
@@ -404,7 +404,7 @@ function veSan(){
       for(let i=0;i<3;i++)for(let j=0;j<2;j++){const x=x0+.7+i*.75,y=y0+.9+j*1.1,k=el("g",{},lopPhong);
         el("polygon",{points:pts([isoP(x,y),isoP(x+.45,y),isoP(x+.45,y,30),isoP(x,y,30)]),fill:"#0f2a24",stroke:p.mau,"stroke-opacity":.6},k);
         for(let q=0;q<3;q++){const [lx,ly]=isoP(x+.22,y,8+q*8);const led=el("circle",{cx:lx,cy:ly,r:1.8,fill:p.mau},k);if(!RM())led.innerHTML=`<animate attributeName="opacity" values="1;.2;1" dur="${1+((i+j+q)%3)*.5}s" repeatCount="indefinite"/>`}}
-      nhanPhong(lopNhan,p,r,LIVE&&TT&&!TT.claude?"chưa thấy Claude Code":"chạy 24/7",!(LIVE&&TT&&!TT.claude));
+      nhanPhong(lopNhan,p,r,LIVE&&TT&&TT.claude!=="ok"?(TT.claude==="chua_dang_nhap"?"Claude chưa đăng nhập":"chưa thấy Claude Code"):"chạy 24/7",!(LIVE&&TT&&TT.claude!=="ok"));
     } else if(p.dacBiet==="sep"){
       ban(lopPhong,cx,cy,p.mau);
       const [sx,sy]=isoP(cx+.2,cy+.8),g2=el("g",{transform:`translate(${sx},${sy})`,class:"bot"},lopBot);

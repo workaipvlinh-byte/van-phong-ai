@@ -73,7 +73,44 @@ ENV = doc_env()
 PORT = int(ENV.get("PORT", "8080"))
 HOST = ENV.get("HOST", "127.0.0.1")
 MODEL = {"nhe": ENV.get("MODEL_NHE", "sonnet"), "manh": ENV.get("MODEL_MANH", "opus")}
-CLAUDE = shutil.which("claude") or shutil.which("claude.cmd")
+
+
+def tim_claude():
+    """Tìm Claude Code: trong PATH, hoặc chỗ bộ cài chính thức đặt (~/.local/bin) khi PATH chưa kịp nhận."""
+    c = shutil.which("claude") or shutil.which("claude.cmd")
+    if c:
+        return c
+    for f in ("claude.exe", "claude"):
+        f = os.path.join(os.path.expanduser("~"), ".local", "bin", f)
+        if os.path.isfile(f):
+            return f
+    return None
+
+
+HET_DANG_NHAP = 0                                   # lúc Claude báo chưa đăng nhập / hết hạn (0 = không)
+DA_GOI_DUOC = False                                 # đã có lần gọi Claude thành công kể từ lúc mở văn phòng
+
+
+def claude_trang_thai():
+    """'chua_cai' | 'chua_dang_nhap' | 'ok'. Đăng nhập trên Windows/Linux nằm ở ~/.claude/.credentials.json;
+    máy Mac cất trong Keychain nên không xem được, coi như đã đăng nhập."""
+    if not tim_claude():
+        return "chua_cai"
+    thu_muc = os.environ.get("CLAUDE_CONFIG_DIR") or os.path.join(os.path.expanduser("~"), ".claude")
+    f = os.path.join(thu_muc, ".credentials.json")
+    if HET_DANG_NHAP:                               # đăng nhập lại sau lúc báo lỗi thì file đổi giờ sửa
+        return "ok" if os.path.isfile(f) and os.path.getmtime(f) > HET_DANG_NHAP else "chua_dang_nhap"
+    if DA_GOI_DUOC or os.environ.get("CLAUDE_CODE_OAUTH_TOKEN") or sys.platform == "darwin":
+        return "ok"
+    return "ok" if os.path.isfile(f) else "chua_dang_nhap"
+
+
+CLAUDE_CHU = {"chua_cai": "chưa cài Claude Code", "chua_dang_nhap": "Claude Code chưa đăng nhập",
+              "ok": "đã cài, đã đăng nhập"}
+CACH_DANG_NHAP = ("Mở cửa sổ lệnh (bấm phím Windows, gõ cmd, Enter), gõ: claude rồi Enter. "
+                  "Trình duyệt mở trang claude.ai, đăng nhập tài khoản Pro trở lên, bấm Authorize. "
+                  "Thấy Login successful là xong, gõ /exit để thoát.")
+CLAUDE = tim_claude()
 MA_KET_NOI = str(random.randint(100000, 999999))    # sếp gửi /ketnoi <mã> để nối nhóm Telegram
 
 
@@ -399,8 +436,10 @@ def dung_het():
 
 
 def goi_claude(prompt, model, timeout=25 * 60, tools="WebSearch,WebFetch,Read,Write,Edit,Glob,Grep,Skill"):
+    global HET_DANG_NHAP, DA_GOI_DUOC
+    CLAUDE = tim_claude()
     if not CLAUDE:
-        raise RuntimeError("Không tìm thấy Claude Code. Cài Claude Code, đăng nhập, rồi chạy lại văn phòng.")
+        raise RuntimeError("Không tìm thấy Claude Code. Bấm đúp CAI-DAT để cài, rồi chạy lại văn phòng.")
     env = dict(os.environ)
     env.pop("ANTHROPIC_API_KEY", None)            # dùng gói Claude đã đăng nhập, không tính tiền API
     env["PYTHONIOENCODING"] = "utf-8"
@@ -429,7 +468,12 @@ def goi_claude(prompt, model, timeout=25 * 60, tools="WebSearch,WebFetch,Read,Wr
     with open(os.path.join(NHAT_KY, f"{bay_gio():%Y%m%d-%H%M%S}.txt"), "w", encoding="utf-8") as f:
         f.write(f"EXIT {p.returncode}\n--- PROMPT ---\n{prompt[-3000:]}\n--- KẾT QUẢ ---\n{ra}\n--- LỖI ---\n{se}")
     if p.returncode != 0 or not ra or loi:
-        raise RuntimeError((se or ra or f"exit {p.returncode}").strip()[-400:])
+        tho = (se or ra or f"exit {p.returncode}").strip()
+        if re.search(r"/login|not logged in|invalid api key|login expired|oauth token|authentication_error", tho, re.I):
+            HET_DANG_NHAP = time.time()
+            raise RuntimeError("Claude Code chưa đăng nhập hoặc hết hạn đăng nhập. " + CACH_DANG_NHAP)
+        raise RuntimeError(tho[-400:])
+    HET_DANG_NHAP, DA_GOI_DUOC = 0, True
     return ra
 
 
@@ -804,7 +848,8 @@ def kiem_tra():
     dong = []
     def d(ok, ten, chu):
         dong.append(("✅" if ok else "❌") + f" {ten}: {chu}")
-    d(bool(CLAUDE), "Claude Code", "có" if CLAUDE else "chưa cài hoặc chưa có trong PATH")
+    tt = claude_trang_thai()
+    d(tt == "ok", "Claude Code", CLAUDE_CHU[tt] + ("" if tt == "ok" else " · bấm đúp CAI-DAT để làm lại bước này"))
     try:
         ten_bot = tg("getMe", timeout=10)["result"]["username"]
         d(True, "Bot Telegram", "@" + ten_bot)
@@ -869,7 +914,7 @@ def trang_thai():
         "so": {"thu": thu, "chi": chi, "ds": doc_so()[-40:]},
         "telegram": {"coToken": bool(ENV.get("TG_TOKEN")), "daNoi": bool(ENV.get("TG_CHAT_ID")),
                      "maKetNoi": "" if ENV.get("TG_CHAT_ID") else MA_KET_NOI, "tenBot": ENV.get("TG_BOT_TEN", "")},
-        "claude": bool(CLAUDE), "brain": doc_brain(20000),
+        "claude": claude_trang_thai(), "brain": doc_brain(20000),
     }
 
 
@@ -989,8 +1034,11 @@ def main():
         threading.Thread(target=t, daemon=True).start()
     srv = ThreadingHTTPServer((HOST, PORT), Web)
     print(f"\n  Văn Phòng AI · {BAN_QUYEN}\n  Đang chạy: http://localhost:{PORT}\n  Đóng cửa sổ này là văn phòng nghỉ.\n", flush=True)
-    if not CLAUDE:
-        print("  ⚠ Chưa thấy Claude Code. Cài và đăng nhập Claude Code thì nhân viên mới làm việc được.\n", flush=True)
+    tt = claude_trang_thai()
+    if tt == "chua_cai":
+        print("  ⚠ Chưa thấy Claude Code. Bấm đúp CAI-DAT để cài, cài xong nhân viên mới làm việc được.\n", flush=True)
+    elif tt == "chua_dang_nhap":
+        print("  ⚠ Claude Code chưa đăng nhập. " + CACH_DANG_NHAP + "\n", flush=True)
     su_kien("Văn phòng mở cửa · " + BAN_QUYEN, "Hệ thống")
     srv.serve_forever()
 

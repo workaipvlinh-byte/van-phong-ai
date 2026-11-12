@@ -12,13 +12,13 @@ Bộ cài này **miễn phí**. Nếu bạn phải trả tiền để có nó, b
 
 - Máy Windows 10/11 (macOS, Linux chạy bằng `chay.sh`).
 - Python 3.10 trở lên.
-- Claude Code, đã đăng nhập bằng tài khoản Claude trả phí (Pro trở lên). Nhân viên dùng lượt của gói này, không tốn tiền API.
+- Tài khoản Claude trả phí (Pro trở lên). Chưa có Claude Code cũng được, bộ cài tự cài và mở sẵn cửa sổ đăng nhập. Nhân viên dùng lượt của gói này, không tốn tiền API.
 - Telegram trên điện thoại.
 
 ## Cài đặt
 
 1. Tải repo về (nút **Code → Download ZIP**), giải nén vào một thư mục, ví dụ `D:\VanPhongAI`.
-2. Bấm đúp **CAI-DAT.bat**. File này kiểm tra Python, Claude Code rồi mở văn phòng.
+2. Bấm đúp **CAI-DAT.bat**. File này kiểm tra Python, cài Claude Code nếu máy chưa có, mở cửa sổ đăng nhập Claude nếu chưa đăng nhập, rồi mở văn phòng.
 3. Trình duyệt mở `http://localhost:8080`. Làm theo 3 bước: đặt tên công ty, chọn mô hình (Shop, Dịch vụ, Làm content, Văn phòng, Tự dựng), nối Telegram.
 4. Từ lần sau chỉ cần bấm đúp **CHAY.bat**. Cửa sổ đen là văn phòng: đóng nó là văn phòng nghỉ.
 
