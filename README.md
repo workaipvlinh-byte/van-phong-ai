@@ -69,3 +69,7 @@ data/               cấu hình, khay việc, sổ thu chi, nhật ký (tự t�
 ## Giấy phép
 
 Dùng cá nhân và cho công việc của bạn thoải mái. Không bán lại. Xem file `LICENSE`.
+
+## Gặp lỗi, muốn góp ý
+
+Bấm **🐞 Gửi lỗi, góp ý** ở cột trái bảng điều khiển. Bạn xem trước toàn bộ nội dung, mã bot và mã bí mật luôn được che. Tin gửi thẳng tới Linh ở toihocai.com.

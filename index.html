@@ -278,10 +278,15 @@ const NV_CUNG=()=>[
  {id:"ceo",ten:"CEO",phong:"ql",cung:"ceo",bat:true,model:"nhe",nv:"Bạn là CEO của văn phòng. Nghe sếp nhắn trong nhóm Telegram, hiểu sếp muốn gì rồi giao cho đúng 1 nhân viên.\nTrả lời ngắn, dễ đọc trên điện thoại. Việc nào cần sếp duyệt thì trình kế hoạch trước, chưa ai làm gì.\nTính cách: vui vẻ, nhanh nhẹn, thấy ý sếp có vấn đề thì nói thẳng.",lich:{kieu:"luon"},gui:"nhom",chuyen:""},
  {id:"tk",ten:"Thư Ký",phong:"ql",cung:"thuky",bat:true,lich:{kieu:"luon"},gui:"nhom",chuyen:""},
  {id:"kt",ten:"Kế Toán",phong:"kt",cung:"ketoan",bat:true,lich:{kieu:"luon"},gui:"nhom",chuyen:""}];
-function taoCongTy(maMH,cty,sep){
-  const mh=MO_HINH[maMH],c={daCaiDat:true,cty:cty||"Văn Phòng AI",sep:sep||"Sếp",moHinh:maMH,logo:"",accent:"#ff8a00",khayGio:["06:30","11:30","20:00","21:30"],phong:structuredClone(mh.phong),nv:NV_CUNG()};
+const BO_NAO=[["haiku","Haiku","nhanh, đỡ tốn lượt nhất"],["sonnet","Sonnet","cân bằng, hợp đa số việc"],["opus","Opus","viết hay nhất, tốn lượt nhất"]];
+const boNao=m=>m==="manh"?"opus":m==="nhe"?"sonnet":(BO_NAO.some(b=>b[0]===m)?m:"sonnet");
+const chonBoNao=(ten,dang)=>`<div class="hang">${BO_NAO.map(([k,t,mo])=>`<button class="chip" data-${ten}="${k}" aria-pressed="${dang===k}" title="${mo}">${t}</button>`).join("")}</div><small>${BO_NAO.map(([k,t,mo])=>`<b>${t}</b>: ${mo}`).join(" · ")}</small>`;
+function taoCongTy(maMH,cty,sep,macDinh){
+  macDinh=boNao(macDinh||"sonnet");
+  const mh=MO_HINH[maMH],c={daCaiDat:true,cty:cty||"Văn Phòng AI",sep:sep||"Sếp",moHinh:maMH,modelMacDinh:macDinh,logo:"",accent:"#ff8a00",khayGio:["06:30","11:30","20:00","21:30"],phong:structuredClone(mh.phong),nv:NV_CUNG()};
   mh.goiY.forEach(i=>{const m=MAU_NV[i],p=c.phong.find(q=>q.ten.endsWith(m.phong))||c.phong.find(q=>!q.dacBiet&&q.id!=="ql");
-    c.nv.push({id:uid(),ten:m.ten,phong:p.id,bat:false,model:m.model,nv:m.nv,lich:structuredClone(m.lich),gui:m.gui,chuyen:""})});
+    c.nv.push({id:uid(),ten:m.ten,phong:p.id,bat:false,model:m.model==="manh"?"opus":macDinh,nv:m.nv,lich:structuredClone(m.lich),gui:m.gui,chuyen:""})});
+  c.nv.find(n=>n.cung==="ceo").model=macDinh==="opus"?"sonnet":macDinh;
   if(maMH==="content"){const ts=c.nv.find(n=>n.ten==="Trinh Sát"),bt=c.nv.find(n=>n.ten==="Biên Tập");if(ts&&bt)ts.chuyen=bt.id}
   return c;
 }
@@ -334,6 +339,7 @@ function veAside(){
   h+=`<div class="side-h">CÔNG CỤ</div>
   <button class="side-item" data-mo="brain"><span class="d" style="background:var(--purple)"></span><span class="t">Second Brain</span><span class="tag">bộ não chung</span></button>
   <button class="side-item" data-mo="tg"><span class="d" style="background:${tg.daNoi?"#29b6f6":"var(--pink)"}"></span><span class="t">Telegram</span><span class="tag">${tg.daNoi?"đã nối":"chưa nối"}</span></button>
+  <button class="side-item" data-mo="gopy"><span class="d" style="background:var(--yellow,#ffc84a)"></span><span class="t">🐞 Gửi lỗi, góp ý</span><span class="tag">cho Linh</span></button>
   <div class="side-h">MÁY CHỦ</div>
   <button class="side-item" data-mo="may"><span class="d" style="background:var(--green);box-shadow:0 0 8px var(--green)"></span><span class="t">⚡ Máy chủ</span><span class="pill">24/7</span></button>
   <a class="rule ban-quyen" href="https://toihocai.com/van-phong-ai/" target="_blank" rel="noopener"><b>toihocai.com</b>Tối học AI</a>`;
@@ -554,6 +560,7 @@ function veNgan(){
     return;
   }
   if(k==="tg"){veNganTelegram(b);return}
+  if(k==="gopy"){veNganGopY(b);return}
   if(k==="sep"){
     const ds=LIVE&&TT?TT.khay.ds.filter(x=>x.trang_thai==="dang"||x.trang_thai==="cho"):[{moc:"11:30",tieu_de:"[ví dụ] Áo khoác gió về hàng, giá 289k",nv:"Content",trang_thai:"cho"}];
     b.innerHTML=`<div class="kicker">PHÒNG GIÁM ĐỐC</div><h3>${esc(S.sep)}</h3><p class="role">Người quyết định cuối cùng. Bấm duyệt ngay trong Telegram.</p>
@@ -596,7 +603,7 @@ function veNgan(){
 }
 function veNganNV(b,moi){
   let n;
-  if(moi){const p0=ngan.phong||(S.phong.find(p=>!p.dacBiet&&p.id!=="ql"&&nvTrong(p.id).length<4)||S.phong.find(p=>!p.dacBiet)).id;n=ngan.nhap||(ngan.nhap={id:uid(),ten:"",phong:p0,bat:true,model:"nhe",nv:"",lich:{kieu:"gio",gio:"08:00"},gui:"khay",chuyen:""})}
+  if(moi){const p0=ngan.phong||(S.phong.find(p=>!p.dacBiet&&p.id!=="ql"&&nvTrong(p.id).length<4)||S.phong.find(p=>!p.dacBiet)).id;n=ngan.nhap||(ngan.nhap={id:uid(),ten:"",phong:p0,bat:true,model:boNao(S.modelMacDinh),nv:"",lich:{kieu:"gio",gio:"08:00"},gui:"khay",chuyen:""})}
   else{n=NV(ngan.id);if(!n)return}
   const phongs=S.phong.filter(p=>!p.dacBiet),src=nguonCua(n.id);
   let h=`<div class="kicker">${moi?"TUYỂN NHÂN VIÊN":esc((P(n.phong)||{}).ten||"").toUpperCase()}</div><h3>${moi?"Thêm nhân viên":esc(n.ten)}</h3>
@@ -625,13 +632,13 @@ function veNganNV(b,moi){
       ${n.chuyen&&NV(n.chuyen)?`<div class="khoa"><b>Chuỗi việc:</b> ${chuoi(n).map(x=>esc(x.ten)).join(" → ")} → ${esc(S.sep)} duyệt<br>Chỉ kết quả cuối chuỗi mới vào khay của ${esc(S.sep)}.</div>`:`<div class="truong"><span class="nhan">LÀM XONG GỬI VÀO</span><div class="hang"><button class="chip" data-gui="khay" aria-pressed="${n.gui==="khay"}">Khay việc (đợi giờ)</button><button class="chip" data-gui="nhom" aria-pressed="${n.gui==="nhom"}">Nhóm Telegram ngay</button></div></div>`}`;
       if(!moi)h+=`<div class="khoa"><b>Gọi thẳng, không qua CEO:</b> nhắn <b>${goTat(n.ten)} &lt;việc&gt;</b> trong Telegram.</div>`;
     }
-    h+=`<div class="truong"><span class="nhan">BỘ NÃO</span><div class="hang"><button class="chip" data-model="nhe" aria-pressed="${n.model!=="manh"}">Nhẹ, đỡ tốn lượt</button><button class="chip" data-model="manh" aria-pressed="${n.model==="manh"}">Mạnh, cho việc viết</button></div></div>
+    h+=`<div class="truong"><span class="nhan">BỘ NÃO</span>${chonBoNao("model",boNao(n.model))}</div>
     <div class="khoa">🔒 <b>An toàn mặc định:</b> nhân viên chỉ đọc web và làm việc trong thư mục văn phòng. Không chạy lệnh trên máy, không xoá file, không tự đăng bài. Bài nào cũng chờ ${esc(S.sep)} duyệt.</div>`;
   }
   h+=`<div class="cuoi">${moi?'<button class="nut nut-cam" id="nLuu">Thêm vào văn phòng</button><button class="nut" id="nHuy">Huỷ</button>':(n.cung?"":'<button class="nut xoa" id="nXoa">Cho nghỉ việc</button>')+(!moi&&n.bat&&!n.cung?'<button class="nut" id="nChay">▶ Chạy thử ngay</button>':"")}</div><p class="bao loi" id="nBao"></p>`;
   b.innerHTML=h;
   const live=()=>{if(!moi){save();veSan();veAside();veStats()}};
-  b.querySelectorAll("[data-mnv]").forEach(x=>x.onclick=()=>{const m=MAU_NV[+x.dataset.mnv],p=m.phong&&S.phong.find(q=>q.ten.endsWith(m.phong)&&nvTrong(q.id).length<4);Object.assign(n,{ten:m.ten,nv:m.nv,lich:structuredClone(m.lich),gui:m.gui,model:m.model});if(p)n.phong=p.id;veNgan()});
+  b.querySelectorAll("[data-mnv]").forEach(x=>x.onclick=()=>{const m=MAU_NV[+x.dataset.mnv],p=m.phong&&S.phong.find(q=>q.ten.endsWith(m.phong)&&nvTrong(q.id).length<4);Object.assign(n,{ten:m.ten,nv:m.nv,lich:structuredClone(m.lich),gui:m.gui,model:m.model==="manh"?"opus":boNao(S.modelMacDinh)});if(p)n.phong=p.id;veNgan()});
   $("#nBat").onclick=()=>{n.bat=!n.bat;live();veNgan()};
   $("#nTen").oninput=e=>{n.ten=e.target.value;if(!moi){save();veSan();veAside();b.querySelector("h3").textContent=n.ten||"Nhân viên"}};
   if($("#nPhong"))$("#nPhong").onchange=e=>{n.phong=e.target.value;live();if(!moi)veNgan()};
@@ -652,6 +659,28 @@ function veNganNV(b,moi){
   if($("#nHuy"))$("#nHuy").onclick=dongNgan;
   if($("#nXoa"))$("#nXoa").onclick=e=>{if(!e.target.dataset.chac){e.target.dataset.chac=1;e.target.textContent="Bấm lần nữa để cho nghỉ";return}S.nv=S.nv.filter(x=>x.id!==n.id);S.nv.forEach(x=>{if(x.chuyen===n.id)x.chuyen=""});save();pushTick(`<b>${esc(n.ten)}</b> nghỉ việc`);dongNgan();veTatCa()};
   if($("#nChay"))$("#nChay").onclick=()=>chayThu(n);
+}
+function veNganGopY(b){
+  const g=ngan.nhap||(ngan.nhap={loai:"loi",noi_dung:"",lien_he:"",kem:true});
+  b.innerHTML=`<div class="kicker">GỬI CHO LINH · TOIHOCAI.COM</div><h3>Gửi lỗi, góp ý</h3><p class="role">Gửi thẳng tới Linh, người làm Văn Phòng AI. Bạn xem trước được toàn bộ nội dung, mã bot và mã bí mật luôn được che.</p>
+  <div class="truong"><span class="nhan">BẠN MUỐN</span><div class="hang"><button class="chip" data-gloai="loi" aria-pressed="${g.loai==="loi"}">🐞 Báo lỗi</button><button class="chip" data-gloai="gopy" aria-pressed="${g.loai==="gopy"}">💡 Góp ý, xin tính năng</button></div></div>
+  <div class="truong"><label for="gyChu">${g.loai==="loi"?"CHUYỆN GÌ XẢY RA":"BẠN MUỐN VĂN PHÒNG LÀM ĐƯỢC GÌ"}</label><textarea class="o" id="gyChu" style="min-height:130px" placeholder="${g.loai==="loi"?"vd: Trinh Sát chạy lúc 4h37 báo lỗi, nhân viên khác vẫn chạy được":"vd: Muốn nhân viên tự đăng bài lên fanpage sau khi mình duyệt"}">${esc(g.noi_dung)}</textarea></div>
+  <div class="truong"><label for="gyLh">ZALO HOẶC FACEBOOK ĐỂ LINH HỎI LẠI (KHÔNG BẮT BUỘC)</label><input class="o" id="gyLh" value="${esc(g.lien_he)}" maxlength="120"></div>
+  <label class="hang" style="gap:8px;align-items:flex-start;margin:4px 0 10px"><input type="checkbox" id="gyKem" ${g.kem?"checked":""}><span>Kèm thông tin máy và lỗi gần đây (giúp sửa nhanh hơn)</span></label>
+  <details class="khoa"><summary>Xem trước nội dung sẽ gửi</summary><pre id="gyXem" style="white-space:pre-wrap;font-size:12px;margin:8px 0 0">${LIVE?"Đang soạn…":"Bản thử trên web chỉ gửi phần bạn viết."}</pre></details>
+  <div class="cuoi"><button class="nut nut-cam" id="gyGui">Gửi cho Linh</button></div><p class="bao" id="gyBao"></p>`;
+  const xem=()=>{if(LIVE)api("/api/gopy",{...g,xem:true}).then(j=>{$("#gyXem").textContent=j.text}).catch(()=>{})};
+  let hen;const doi=()=>{clearTimeout(hen);hen=setTimeout(xem,400)};
+  b.querySelectorAll("[data-gloai]").forEach(x=>x.onclick=()=>{g.loai=x.dataset.gloai;veNganGopY(b)});
+  $("#gyChu").oninput=e=>{g.noi_dung=e.target.value;doi()};$("#gyLh").oninput=e=>{g.lien_he=e.target.value;doi()};$("#gyKem").onchange=e=>{g.kem=e.target.checked;xem()};
+  xem();
+  $("#gyGui").onclick=async e=>{const bao=$("#gyBao");if(g.noi_dung.trim().length<5){bao.className="bao loi";bao.textContent="Viết thêm vài chữ cho Linh hiểu chuyện gì nhé";return}
+    e.target.disabled=true;bao.className="bao";bao.textContent="Đang gửi…";
+    try{
+      if(LIVE)await api("/api/gopy",g);
+      else{const r=await fetch("/api/gop-y",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({text:(g.loai==="loi"?"🐞 BÁO LỖI":"💡 GÓP Ý")+" · bản thử trên web\nLiên hệ: "+(g.lien_he||"(không để lại)")+"\n\n"+g.noi_dung,phien_ban:"web"})});const j=await r.json().catch(()=>({}));if(!r.ok||!j.ok)throw new Error(j.loi||"Chưa gửi được, thử lại sau nhé")}
+      ngan.nhap=null;bao.className="bao ok";bao.textContent="Đã gửi. Cảm ơn bạn, Linh đọc hết từng cái.";$("#gyChu").value="";
+    }catch(err){bao.className="bao loi";bao.textContent=err.message}finally{e.target.disabled=false}};
 }
 function veNganTelegram(b){
   const t=LIVE&&TT?TT.telegram:null;
@@ -709,7 +738,7 @@ function pushTick(h){ticks.unshift(`<span>${new Date().toTimeString().slice(0,5)
 function giaLap(){if(lam.size||LIVE)return;const ds=S.nv.filter(n=>n.bat&&!n.cung&&!nguonCua(n.id).length);if(ds.length)chayThu(ds[Math.floor(Math.random()*ds.length)])}
 
 /* ---------------- bước cài đặt lần đầu ---------------- */
-let nhap={cty:"",sep:"Sếp",mh:"shop"};
+let nhap={cty:"",sep:"Sếp",mh:"shop",model:"sonnet"};
 function moDau(buoc,lamLai){
   const m=$("#moDau"),h=$("#hop");m.hidden=false;
   if(buoc===1){
@@ -723,10 +752,12 @@ function moDau(buoc,lamLai){
   } else if(buoc===2){
     h.innerHTML=`<div class="buoc">BƯỚC 2/3</div><h2 id="hopTieuDe">Công ty bạn làm gì?</h2><p class="goi">Chọn gần đúng nhất. Phòng ban và vài nhân viên gợi ý sẽ được dựng sẵn ở trạng thái nghỉ, bạn bật ai thì người đó làm. Sau này đổi tên, thêm, bớt thoải mái.</p>
     <div class="luoi-mh">${Object.entries(MO_HINH).map(([k,v])=>`<button class="mh" data-mh="${k}" aria-pressed="${nhap.mh===k}"><i>${v.i}</i><b>${v.ten}</b><span>${v.mo}</span></button>`).join("")}</div>
+    <div class="truong" style="margin-top:14px"><span class="nhan">BỘ NÃO MẶC ĐỊNH CHO NHÂN VIÊN</span>${chonBoNao("mdmodel",nhap.model)}<small>Nhân viên viết bài dài vẫn để Opus. Sau này đổi riêng từng người trên bảng điều khiển.</small></div>
     <div class="hang-nut"><button class="nut" id="mdLui">Quay lại</button><button class="nut nut-cam" id="mdTiep">Dựng văn phòng</button></div>`;
     h.querySelectorAll("[data-mh]").forEach(x=>x.onclick=()=>{nhap.mh=x.dataset.mh;h.querySelectorAll("[data-mh]").forEach(y=>y.setAttribute("aria-pressed",y===x))});
+    h.querySelectorAll("[data-mdmodel]").forEach(x=>x.onclick=()=>{nhap.model=x.dataset.mdmodel;h.querySelectorAll("[data-mdmodel]").forEach(y=>y.setAttribute("aria-pressed",y===x))});
     $("#mdLui").onclick=()=>moDau(1,lamLai);
-    $("#mdTiep").onclick=async()=>{const giu=S&&lamLai?{logo:S.logo,accent:S.accent,khayGio:S.khayGio}:{};S=Object.assign(taoCongTy(nhap.mh,nhap.cty,nhap.sep),giu);
+    $("#mdTiep").onclick=async()=>{const giu=S&&lamLai?{logo:S.logo,accent:S.accent,khayGio:S.khayGio}:{};S=Object.assign(taoCongTy(nhap.mh,nhap.cty,nhap.sep,nhap.model),giu);
       if(LIVE){try{const j=await api("/api/luu",S);S=j.cfg}catch(e){alertHop(e.message);return}}else save();
       batDau();moDau(3)};
   } else {

@@ -37,6 +37,7 @@ F_ENV = os.path.join(BASE, ".env")
 
 KHOA = threading.RLock()
 BAN_QUYEN = "© 2026 Phạm Linh · toihocai.com · bản phát hành miễn phí"
+PHIEN_BAN = "1.2.0"
 CHAN_TRANG = ('<div class="nguon-tu-dong" style="position:fixed;right:12px;bottom:10px;z-index:30;font:500 11.5px system-ui,sans-serif;'
               'color:#8a92c4;background:rgba(7,8,20,.75);padding:3px 9px;border-radius:999px">Văn Phòng AI · ' + BAN_QUYEN + '</div>')
 
@@ -72,7 +73,19 @@ def ghi_env(**cap_nhat):
 ENV = doc_env()
 PORT = int(ENV.get("PORT", "8080"))
 HOST = ENV.get("HOST", "127.0.0.1")
-MODEL = {"nhe": ENV.get("MODEL_NHE", "sonnet"), "manh": ENV.get("MODEL_MANH", "opus")}
+MODEL = {"nhe": ENV.get("MODEL_NHE", "sonnet"), "manh": ENV.get("MODEL_MANH", "opus")}   # bản cũ: nhẹ / mạnh
+BO_NAO_HOP_LE = ("haiku", "sonnet", "opus", "nhe", "manh")
+
+
+def bo_nao(m):
+    """Tên model đưa cho Claude Code. Bản mới lưu thẳng haiku/sonnet/opus; bản cũ lưu nhe/manh thì đọc từ .env."""
+    return MODEL.get(m) or (m if m in ("haiku", "sonnet", "opus") else MODEL["nhe"])
+
+
+def bo_nao_du_phong(ten):
+    """Bộ não thử lại khi bộ não chính bị từ chối hoặc lỗi: Opus ↔ Sonnet, Haiku → Sonnet."""
+    t = ten.lower()
+    return "sonnet" if ("opus" in t or "haiku" in t) else "opus"
 
 
 def tim_claude():
@@ -191,6 +204,7 @@ def lam_sach_cfg(c):
     out["logo"] = logo if logo.startswith("data:image/") and len(logo) < 900_000 else ""
     gio = [g for g in (c.get("khayGio") or []) if RE_GIO.match(str(g))]
     out["khayGio"] = sorted(set(gio))[:8] or ["06:30", "11:30", "20:00", "21:30"]
+    out["modelMacDinh"] = c.get("modelMacDinh") if c.get("modelMacDinh") in ("haiku", "sonnet", "opus") else "sonnet"
     phong, ids = [], set()
     for p in (c.get("phong") or [])[:30]:
         if not RE_ID.match(str(p.get("id", ""))) or p["id"] in ids:
@@ -213,7 +227,7 @@ def lam_sach_cfg(c):
                 "thu": sorted({int(x) for x in (l.get("thu") or []) if str(x).isdigit() and 0 <= int(x) <= 6})}
         nv.append({"id": n["id"], "ten": chu(n.get("ten"), 30) or "Nhân viên", "phong": n.get("phong") if n.get("phong") in ids else thuong[0],
                    "cung": n.get("cung") if n.get("cung") in CUNG else "", "bat": bool(n.get("bat")),
-                   "model": "manh" if n.get("model") == "manh" else "nhe", "nv": str(n.get("nv") or "")[:6000],
+                   "model": n.get("model") if n.get("model") in BO_NAO_HOP_LE else "sonnet", "nv": str(n.get("nv") or "")[:6000],
                    "lich": lich, "gui": "nhom" if n.get("gui") == "nhom" else "khay", "chuyen": str(n.get("chuyen") or "")})
     co = {n["cung"] for n in nv}
     mac = {"ceo": ("CEO", "Bạn là CEO của văn phòng. Nghe sếp nhắn, hiểu sếp muốn gì rồi giao cho đúng 1 nhân viên. Trả lời ngắn, dễ đọc trên điện thoại."),
@@ -221,7 +235,7 @@ def lam_sach_cfg(c):
     for k, (ten, mo_ta) in mac.items():          # 3 nhân viên cứng luôn có
         if k not in co:
             nv.append({"id": {"ceo": "ceo", "thuky": "tk", "ketoan": "kt"}[k], "ten": ten, "phong": thuong[0], "cung": k, "bat": True,
-                       "model": "nhe", "nv": mo_ta, "lich": {"kieu": "luon", "gio": "08:00", "thu": []}, "gui": "nhom", "chuyen": ""})
+                       "model": "sonnet", "nv": mo_ta, "lich": {"kieu": "luon", "gio": "08:00", "thu": []}, "gui": "nhom", "chuyen": ""})
     for n in nv:
         if n["cung"]:
             n["bat"] = True if n["cung"] == "ceo" else n["bat"]
@@ -547,22 +561,23 @@ def chay_nv(nid, dau_vao="", nguon="lich"):
     DANG_LAM[nid] = time.time()
     su_kien("bắt đầu làm việc" + (" (sếp gọi thẳng)" if nguon == "sep" else ""), n["ten"])
     try:
+        chinh = bo_nao(n["model"])
         try:
-            ra = goi_claude(prompt_nv(c, n, dau_vao), MODEL[n["model"]])
-        except TuChoi:                              # Claude gợi ý đổi bộ não: thử 1 lần bằng bộ não còn lại
-            khac = "nhe" if n["model"] == "manh" else "manh"
-            su_kien(f"Claude từ chối với bộ não {MODEL[n['model']]}, thử lại bằng {MODEL[khac]}", n["ten"], "loi")
-            ra = goi_claude(prompt_nv(c, n, dau_vao), MODEL[khac])
+            ra = goi_claude(prompt_nv(c, n, dau_vao), chinh)
+        except TuChoi:                              # Claude gợi ý đổi bộ não: thử 1 lần bằng bộ não khác
+            khac = bo_nao_du_phong(chinh)
+            su_kien(f"Claude từ chối với {chinh}, thử lại bằng {khac}", n["ten"], "loi")
+            ra = goi_claude(prompt_nv(c, n, dau_vao), khac)
         except RuntimeError as e:
-            if n["model"] != "manh" or "đăng nhập" in str(e):
+            if "opus" not in chinh.lower() or "đăng nhập" in str(e):
                 raise
-            su_kien("Bộ não mạnh không chạy được, thử lại bằng bộ não nhẹ", n["ten"], "loi")
-            ra = goi_claude(prompt_nv(c, n, dau_vao), MODEL["nhe"])
+            su_kien(f"{chinh} không chạy được, thử lại bằng sonnet", n["ten"], "loi")
+            ra = goi_claude(prompt_nv(c, n, dau_vao), "sonnet")
     except InterruptedError:
         su_kien("đã dừng theo lệnh sếp", n["ten"]); return
     except Exception as e:
         su_kien(f"lỗi: {str(e)[:160]}", n["ten"], "loi")
-        gui(f"⚠️ {n['ten']} bị lỗi, việc chưa xong.\n{str(e)[-300:]}", ai="💼 CEO")
+        gui(f"⚠️ {n['ten']} bị lỗi, việc chưa xong.\n{str(e)[-300:]}\n\nLỗi lạ thì bấm 🐞 Gửi lỗi trên bảng điều khiển, Linh ở toihocai.com sẽ xem giúp.", ai="💼 CEO")
         return
     finally:
         DANG_LAM.pop(nid, None)
@@ -647,11 +662,11 @@ LỆNH: /<lệnh nhân viên> <việc cần làm, viết đủ ý>
 - Hỏi thông tin thì trả lời, không tự giao việc. Không có nhân viên phù hợp thì nói thẳng và gợi ý tuyển thêm trên bảng điều khiển.
 - Không bao giờ nói đã gửi, đã đăng, đã làm điều gì mà bạn không thấy trong dữ liệu trên."""
     try:
-        mo = ceo_nv.get("model", "nhe")
+        mo = bo_nao(ceo_nv.get("model", "sonnet"))
         try:
-            ra = goi_claude(prompt, MODEL[mo], timeout=5 * 60, tools="Read,Glob,Grep")
+            ra = goi_claude(prompt, mo, timeout=5 * 60, tools="Read,Glob,Grep")
         except TuChoi:
-            ra = goi_claude(prompt, MODEL["nhe" if mo == "manh" else "manh"], timeout=5 * 60, tools="Read,Glob,Grep")
+            ra = goi_claude(prompt, bo_nao_du_phong(mo), timeout=5 * 60, tools="Read,Glob,Grep")
     except Exception as e:
         gui(f"⚠️ CEO đang lỗi, chưa trả lời được: {str(e)[-200:]}", ai="💼 CEO"); return
     finally:
@@ -858,6 +873,42 @@ def so_thang():
             + ("Chi lớn nhất:\n" + "\n".join(f"- {tien(r['so_tien'])} {r['noi_dung']}" for r in lon) if lon else "Chưa có khoản chi nào."))
 
 
+# ---------------- gửi lỗi / góp ý về toihocai.com ----------------
+def che_bi_mat(t):
+    """Che mã bot Telegram, mã nhóm và mọi giá trị trong .env trước khi gửi đi."""
+    for k, v in ENV.items():
+        if v and len(v) >= 6 and k not in ("PORT", "HOST", "MODEL_NHE", "MODEL_MANH"):
+            t = t.replace(v, "[đã che]")
+    t = re.sub(r"\b\d{6,12}:[A-Za-z0-9_-]{30,}\b", "[mã bot đã che]", t)
+    return re.sub(r"sk-ant-[A-Za-z0-9_-]+", "[mã API đã che]", t)
+
+
+def bao_cao_gop_y(loai, noi_dung, lien_he, kem):
+    c = cfg() or {"nv": []}
+    dong = [f"{'🐞 BÁO LỖI' if loai == 'loi' else '💡 GÓP Ý'} · Văn Phòng AI {PHIEN_BAN}",
+            f"Liên hệ: {lien_he or '(không để lại)'}", "", noi_dung.strip() or "(trống)"]
+    if kem:
+        loi = [e for e in SU_KIEN if e["loai"] == "loi"][-12:]
+        dong += ["", "--- Thông tin máy ---",
+                 f"Hệ điều hành: {sys.platform} · Python {sys.version.split()[0]}",
+                 f"Claude Code: {CLAUDE_CHU[claude_trang_thai()]}",
+                 f"Telegram: {'đã nối' if ENV.get('TG_CHAT_ID') else 'chưa nối'}",
+                 f"Mô hình công ty: {c.get('moHinh') or '?'} · bộ não mặc định {c.get('modelMacDinh', 'sonnet')}",
+                 "Nhân viên: " + ", ".join(f"{n['ten']} ({bo_nao(n.get('model', 'sonnet'))}, {'bật' if n['bat'] else 'nghỉ'})" for n in c["nv"]),
+                 "", "--- Lỗi gần đây ---"] + ([f"{e['t'][5:16]} {e['ai']}: {e['chu'][:300]}" for e in loi] or ["(không có)"])
+    return che_bi_mat("\n".join(dong))[:12000]
+
+
+def gui_gop_y(text):
+    url = ENV.get("GOP_Y_URL") or "https://toihocai.com/api/gop-y"
+    req = urllib.request.Request(url, data=json.dumps({"text": text, "phien_ban": PHIEN_BAN}).encode("utf-8"),
+                                 headers={"Content-Type": "application/json", "User-Agent": f"VanPhongAI/{PHIEN_BAN}"})
+    with urllib.request.urlopen(req, timeout=20) as r:
+        j = json.loads(r.read().decode("utf-8") or "{}")
+    if not j.get("ok"):
+        raise RuntimeError(j.get("loi") or "Máy chủ toihocai.com không nhận")
+
+
 # ---------------- /kiemtra ----------------
 def kiem_tra():
     dong = []
@@ -929,7 +980,7 @@ def trang_thai():
         "so": {"thu": thu, "chi": chi, "ds": doc_so()[-40:]},
         "telegram": {"coToken": bool(ENV.get("TG_TOKEN")), "daNoi": bool(ENV.get("TG_CHAT_ID")),
                      "maKetNoi": "" if ENV.get("TG_CHAT_ID") else MA_KET_NOI, "tenBot": ENV.get("TG_BOT_TEN", "")},
-        "claude": claude_trang_thai(), "brain": doc_brain(20000),
+        "claude": claude_trang_thai(), "phienBan": PHIEN_BAN, "brain": doc_brain(20000),
     }
 
 
@@ -1016,6 +1067,19 @@ class Web(BaseHTTPRequestHandler):
             if duong == "/api/brain":
                 with open(os.path.join(BRAIN, "00-ve-chu.md"), "w", encoding="utf-8") as f:
                     f.write(str(body.get("chu") or "")[:20000])
+                return self.tra(200, {"ok": True})
+            if duong == "/api/gopy":
+                loai = "loi" if body.get("loai") == "loi" else "gopy"
+                text = bao_cao_gop_y(loai, str(body.get("noi_dung") or "")[:4000], str(body.get("lien_he") or "")[:120].strip(), bool(body.get("kem")))
+                if body.get("xem"):
+                    return self.tra(200, {"ok": True, "text": text})
+                if len(str(body.get("noi_dung") or "").strip()) < 5:
+                    return self.tra(400, {"loi": "Viết thêm vài chữ cho Linh hiểu chuyện gì nhé"})
+                try:
+                    gui_gop_y(text)
+                except Exception as e:
+                    return self.tra(502, {"loi": f"Chưa gửi được ({str(e)[:120]}). Kiểm tra mạng rồi thử lại, hoặc chép nội dung gửi vào nhóm."})
+                su_kien("đã gửi " + ("báo lỗi" if loai == "loi" else "góp ý") + " cho toihocai.com", "Hệ thống")
                 return self.tra(200, {"ok": True})
             if duong == "/api/dung":
                 n_, bo = dung_het()
