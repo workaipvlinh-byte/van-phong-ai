@@ -435,6 +435,10 @@ def dung_het():
     return n, bo
 
 
+class TuChoi(RuntimeError):
+    """Claude từ chối trả lời việc này (bộ lọc an toàn của Anthropic), đổi bộ não khác thường qua được."""
+
+
 def goi_claude(prompt, model, timeout=25 * 60, tools="WebSearch,WebFetch,Read,Write,Edit,Glob,Grep,Skill"):
     global HET_DANG_NHAP, DA_GOI_DUOC
     CLAUDE = tim_claude()
@@ -472,6 +476,9 @@ def goi_claude(prompt, model, timeout=25 * 60, tools="WebSearch,WebFetch,Read,Wr
         if re.search(r"/login|not logged in|invalid api key|login expired|oauth token|authentication_error", tho, re.I):
             HET_DANG_NHAP = time.time()
             raise RuntimeError("Claude Code chưa đăng nhập hoặc hết hạn đăng nhập. " + CACH_DANG_NHAP)
+        if re.search(r"can.t respond to your last message|unable to respond to this request|usage policy|change your model", tho, re.I):
+            raise TuChoi(f"Claude ({model}) từ chối làm việc này. Hay gặp khi trang web nhân viên đọc có nội dung bị bộ lọc an toàn "
+                         "của Anthropic chặn, hoặc nhiệm vụ viết dễ bị hiểu nhầm. Thử bỏ bớt trang nguồn lạ, hoặc viết lại nhiệm vụ rõ hơn.")
         raise RuntimeError(tho[-400:])
     HET_DANG_NHAP, DA_GOI_DUOC = 0, True
     return ra
@@ -542,8 +549,12 @@ def chay_nv(nid, dau_vao="", nguon="lich"):
     try:
         try:
             ra = goi_claude(prompt_nv(c, n, dau_vao), MODEL[n["model"]])
-        except RuntimeError:
-            if n["model"] != "manh":
+        except TuChoi:                              # Claude gợi ý đổi bộ não: thử 1 lần bằng bộ não còn lại
+            khac = "nhe" if n["model"] == "manh" else "manh"
+            su_kien(f"Claude từ chối với bộ não {MODEL[n['model']]}, thử lại bằng {MODEL[khac]}", n["ten"], "loi")
+            ra = goi_claude(prompt_nv(c, n, dau_vao), MODEL[khac])
+        except RuntimeError as e:
+            if n["model"] != "manh" or "đăng nhập" in str(e):
                 raise
             su_kien("Bộ não mạnh không chạy được, thử lại bằng bộ não nhẹ", n["ten"], "loi")
             ra = goi_claude(prompt_nv(c, n, dau_vao), MODEL["nhe"])
@@ -636,7 +647,11 @@ LỆNH: /<lệnh nhân viên> <việc cần làm, viết đủ ý>
 - Hỏi thông tin thì trả lời, không tự giao việc. Không có nhân viên phù hợp thì nói thẳng và gợi ý tuyển thêm trên bảng điều khiển.
 - Không bao giờ nói đã gửi, đã đăng, đã làm điều gì mà bạn không thấy trong dữ liệu trên."""
     try:
-        ra = goi_claude(prompt, MODEL[ceo_nv.get("model", "nhe")], timeout=5 * 60, tools="Read,Glob,Grep")
+        mo = ceo_nv.get("model", "nhe")
+        try:
+            ra = goi_claude(prompt, MODEL[mo], timeout=5 * 60, tools="Read,Glob,Grep")
+        except TuChoi:
+            ra = goi_claude(prompt, MODEL["nhe" if mo == "manh" else "manh"], timeout=5 * 60, tools="Read,Glob,Grep")
     except Exception as e:
         gui(f"⚠️ CEO đang lỗi, chưa trả lời được: {str(e)[-200:]}", ai="💼 CEO"); return
     finally:
