@@ -1,4 +1,6 @@
 # -*- coding: utf-8 -*-
+# Văn Phòng AI · Bản quyền (c) 2026 Phạm Linh · toihocai.com
+# Dùng cá nhân và cho công việc của bạn thoải mái. KHÔNG được bán lại hay đưa vào sản phẩm thu phí. Xem LICENSE.
 """
 Văn Phòng AI - bản khởi tạo.
 Một công ty thu nhỏ chạy bằng Claude Code: CEO nghe lệnh qua Telegram, Thư Ký giữ khay việc,
@@ -302,7 +304,9 @@ TRO_GIUP = """Nhắn bình thường là CEO nghe và giao việc.
 /chi 200k mua tên miền  ·  /thu 3tr làm web cho khách
 /so  xem sổ thu chi tháng này
 /nho <điều cần nhớ>  ghi vào bộ não chung
-/<tên nhân viên> <việc>  gọi thẳng 1 nhân viên, vd /content viết bài áo khoác"""
+/<tên nhân viên> <việc>  gọi thẳng 1 nhân viên, vd /content viết bài áo khoác
+
+Văn Phòng AI · bản miễn phí từ toihocai.com"""
 
 
 def xu_ly_lenh(chu, tu_web=False):

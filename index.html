@@ -1,6 +1,7 @@
 <!doctype html>
 <html lang="vi">
 <head>
+<!-- Văn Phòng AI · Bản quyền (c) 2026 Phạm Linh · toihocai.com · Không được bán lại. Xem LICENSE. -->
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Văn Phòng AI</title>
@@ -143,6 +144,9 @@ footer .live::before{content:"";width:7px;height:7px;border-radius:50%;backgroun
 @keyframes nhay{50%{opacity:.25}}
 .tick{display:flex;gap:34px;white-space:nowrap;color:var(--muted);overflow:hidden}
 .tick b{color:var(--accent);font-weight:600}
+.tick{flex:1;min-width:0}
+.nguon{flex:none;margin-left:12px;font-size:11.5px;color:var(--muted);text-decoration:none;white-space:nowrap}
+.nguon:hover{color:var(--accent)}
 
 @media (max-width:1100px){.stats{grid-template-columns:repeat(3,minmax(0,1fr))}}
 @media (max-width:900px){
@@ -224,7 +228,7 @@ code{font-family:var(--so);font-size:.92em;background:var(--bg);border:1px solid
     </div>
   </main>
 
-  <footer><div class="live">TRỰC TIẾP</div><div class="tick" id="tick"></div></footer>
+  <footer><div class="live">TRỰC TIẾP</div><div class="tick" id="tick"></div><a class="nguon" href="https://toihocai.com/van-phong-ai/" target="_blank" rel="noopener">Văn Phòng AI · toihocai.com</a></footer>
 </div>
 
 <div class="mo-dau" id="moDau" hidden><div class="hop" id="hop" role="dialog" aria-modal="true" aria-labelledby="hopTieuDe"></div></div>
