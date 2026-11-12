@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# Văn Phòng AI · Bản quyền (c) 2026 Phạm Linh · toihocai.com
+# Văn Phòng AI · © 2026 Phạm Linh · toihocai.com · bản phát hành miễn phí
 # Dùng cá nhân và cho công việc của bạn thoải mái. KHÔNG được bán lại hay đưa vào sản phẩm thu phí. Xem LICENSE.
 """
 Văn Phòng AI - bản khởi tạo.
@@ -306,7 +306,7 @@ TRO_GIUP = """Nhắn bình thường là CEO nghe và giao việc.
 /nho <điều cần nhớ>  ghi vào bộ não chung
 /<tên nhân viên> <việc>  gọi thẳng 1 nhân viên, vd /content viết bài áo khoác
 
-Văn Phòng AI · bản miễn phí từ toihocai.com"""
+Văn Phòng AI · © 2026 Phạm Linh · toihocai.com · bản phát hành miễn phí"""
 
 
 def xu_ly_lenh(chu, tu_web=False):
