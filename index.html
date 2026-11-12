@@ -82,6 +82,13 @@ main{position:relative;overflow:hidden;display:flex;flex-direction:column;min-wi
 .stage{flex:1;position:relative;min-height:0}
 svg#office{position:absolute;inset:0;width:100%;height:100%;touch-action:pan-x pan-y;transition:right .25s}
 .stage.mo svg#office{right:360px}
+.dang-chay{position:absolute;left:18px;top:10px;z-index:5;max-width:min(560px,calc(100% - 36px));display:flex;gap:12px;align-items:flex-start;padding:10px 12px 10px 14px;border-radius:14px;background:var(--bg2);border:1px solid color-mix(in srgb,var(--accent) 45%,var(--line));box-shadow:0 10px 30px -14px rgba(0,0,0,.45);font-size:13px;line-height:1.45}
+.dang-chay .xoay{flex:none;width:14px;height:14px;margin-top:2px;border-radius:50%;border:2px solid color-mix(in srgb,var(--accent) 30%,transparent);border-top-color:var(--accent);animation:xoay .9s linear infinite}
+@keyframes xoay{to{transform:rotate(360deg)}}
+.dang-chay b{font-weight:700}.dang-chay .buoc{color:var(--muted);font-size:12.5px}
+.dang-chay .cho{color:var(--muted);font-size:12px}
+.dang-chay button{flex:none;margin-left:auto;font:600 12px inherit;border:1px solid var(--line);background:transparent;color:var(--text);border-radius:999px;padding:4px 10px;cursor:pointer}
+@media (prefers-reduced-motion:reduce){.dang-chay .xoay{animation:none}}
 .badge{position:absolute;right:18px;top:10px;font-size:11px;color:var(--muted);border:1px solid var(--line);padding:4px 9px;border-radius:999px;background:var(--bg2)}
 .tabs{position:absolute;left:18px;bottom:12px;display:flex;gap:8px;z-index:2}
 .tabs button{border:1px solid var(--line);background:var(--bg2);padding:7px 13px;border-radius:8px;font-weight:600;font-size:13px}
@@ -221,6 +228,7 @@ code{font-family:var(--so);font-size:.92em;background:var(--bg);border:1px solid
     <div class="stage">
       <svg id="office" aria-label="Sơ đồ văn phòng"></svg>
       <div class="badge" id="badge">Bản xem thử · dữ liệu mẫu</div>
+      <div class="dang-chay" id="dangChay" hidden role="status" aria-live="polite"></div>
       <div class="view" id="v-lich"></div>
       <div class="view" id="v-so"></div>
       <div class="tabs">
@@ -317,7 +325,7 @@ $("#logoFile").onchange=e=>{const f=e.target.files[0];if(!f)return;if(f.size>600
 $("#nutSangToi").onclick=()=>{const r=document.documentElement,sang=r.dataset.theme?r.dataset.theme==="light":matchMedia("(prefers-color-scheme: light)").matches;r.dataset.theme=sang?"dark":"light";ghi("vpai-theme",r.dataset.theme)};
 $("#nutGD").onclick=()=>moNgan({loai:"giaodien"});
 $("#cmdGo").onclick=async()=>{const v=$("#cmdIn").value.trim();if(!v)return;$("#cmdIn").value="";
-  if(LIVE){try{await api("/api/lenh",{chu:v});pushTick(`Đã gửi: ${esc(v)}`)}catch(e){pushTick(`<b>Lỗi:</b> ${esc(e.message)}`)}return}
+  if(LIVE){try{const j=await api("/api/lenh",{chu:v});pushTick(j.ban?`<b>Đang bận</b>, chưa nhận thêm. Xem Telegram để chọn xếp hàng hay dừng việc cũ.`:`Đã gửi: ${esc(v)}`);keoTrangThai()}catch(e){pushTick(`<b>Lỗi:</b> ${esc(e.message)}`)}return}
   if(v.startsWith("/")){const lenh=v.split(/\s+/)[0].toLowerCase(),n=S.nv.find(x=>!x.cung&&goTat(x.ten)===lenh);if(n){pushTick(`<b>${esc(S.sep)}</b> gọi thẳng <b>${esc(n.ten)}</b>`);chayThu(n);return}}
   pushTick(`<b>${esc(S.sep)}</b> giao: ${esc(v)} → CEO đang lên kế hoạch`)};
 $("#cmdIn").onkeydown=e=>{if(e.key==="Enter")$("#cmdGo").click()};
@@ -811,12 +819,25 @@ function alertHop(t){const p=document.createElement("p");p.className="bao loi";p
 
 /* ---------------- nối máy chủ ---------------- */
 let lamTruoc="";
+/* Thanh "đang chạy": ai đang làm gì, bước nào, bao lâu, việc nào chờ. Bận thì việc mới phải hỏi xếp hàng. */
+function veDangChay(){
+  const el=$("#dangChay"),d=TT&&TT.dangChay,cho=(TT&&TT.dsCho)||[],ban=!!(d||cho.length||(TT&&TT.lam.length));
+  $("#cmdIn").placeholder=ban?"Văn phòng đang bận · việc mới sẽ hỏi bạn xếp hàng hay dừng việc cũ":"Giao việc cho CEO, hoặc gọi thẳng: /tên-nhân-viên việc…";
+  if(!ban){el.hidden=true;return}
+  const pg=g=>Math.floor(g/60)+":"+String(g%60).padStart(2,"0");
+  el.innerHTML=`<span class="xoay" aria-hidden="true"></span><div>${d?`<b>${esc(d.ai)}</b> đang làm: ${esc(d.viec)} · ${pg(d.giay)}<div class="buoc">› ${esc(d.buoc)}${d.soBuoc?` (bước ${d.soBuoc})`:""}</div>`:"<b>Đang chuẩn bị việc…</b>"}
+    ${cho.length?`<div class="cho">Đang chờ: ${cho.slice(0,4).map(x=>esc(x.ten)).join(", ")}${cho.length>4?` và ${cho.length-4} việc nữa`:""}</div>`:""}</div>
+    <button type="button" id="dcDung" title="Dừng việc đang chạy và bỏ hàng chờ">⛔ Dừng</button>`;
+  el.hidden=false;
+  $("#dcDung").onclick=e=>{if(!e.target.dataset.chac){e.target.dataset.chac=1;e.target.textContent="Bấm lần nữa";return}api("/api/dung",{}).then(()=>{pushTick("Đã dừng mọi việc");keoTrangThai()})};
+}
 async function keoTrangThai(){
   try{TT=await api("/api/trangthai")}catch(e){$("#badge").textContent="Mất kết nối máy chủ · mở lại cửa sổ văn phòng";$("#badge").hidden=false;return}
   $("#badge").hidden=true;
   const moi=TT.lam.sort().join(",")+"|"+TT.telegram.daNoi+"|"+TT.claude+"|"+choDuyet()+"|"+JSON.stringify(TT.botRieng||{});lam.clear();TT.lam.forEach(x=>lam.add(x));
   ticks=TT.suKien.slice().reverse().slice(0,8).map(e=>`<span>${e.t.slice(11,16)} · ${e.ai?`<b>${esc(e.ai)}</b> `:""}${esc(e.chu)}</span>`);$("#tick").innerHTML=ticks.join("");
   if(moi!==lamTruoc){lamTruoc=moi;veSan()}
+  veDangChay();
   veStats();if(!document.activeElement||!$("#aside").contains(document.activeElement))veAside();
   if(!$("#moDau").hidden&&TT.telegram.daNoi&&$("#hop").querySelector(".ma"))moDau(3);
   if(ngan&&ngan.loai==="tg"&&TT.telegram.daNoi&&$("#dbody").querySelector(".ma"))veNgan();

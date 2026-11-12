@@ -37,7 +37,7 @@ F_ENV = os.path.join(BASE, ".env")
 
 KHOA = threading.RLock()
 BAN_QUYEN = "© 2026 Phạm Linh · toihocai.com · bản phát hành miễn phí"
-PHIEN_BAN = "1.3.0"
+PHIEN_BAN = "1.4.0"
 CHAN_TRANG = ('<div class="nguon-tu-dong" style="position:fixed;right:12px;bottom:10px;z-index:30;font:500 11.5px system-ui,sans-serif;'
               'color:#8a92c4;background:rgba(7,8,20,.75);padding:3px 9px;border-radius:999px">Văn Phòng AI · ' + BAN_QUYEN + '</div>')
 
@@ -438,6 +438,7 @@ TRO_GIUP = """Nhắn bình thường là CEO nghe và giao việc.
 /khay  lấy việc kế tiếp trong khay ngay
 /dung  dừng mọi việc đang chạy
 /kiemtra  khám sức khoẻ văn phòng
+/tiendo  xem nhân viên nào đang chạy việc gì, việc nào đang chờ
 /chi 200k mua tên miền  ·  /thu 3tr làm web cho khách
 /so  xem sổ thu chi tháng này
 /nho <điều cần nhớ>  ghi vào bộ não chung
@@ -461,6 +462,8 @@ def xu_ly_lenh(chu, tu_web=False):
         if not khay_dua(ep=True, loai=sau):
             gui("Khay trống, chưa có việc nào chờ sếp 👌", ai="🗂 Thư Ký")
         return "ok"
+    if lenh == "/tiendo":
+        gui(mo_ta_ban(), ai="💼 CEO"); return "ok"
     if lenh == "/kiemtra":
         gui(kiem_tra(), ai="💼 CEO"); return "ok"
     if lenh in ("/thu", "/chi"):
@@ -478,11 +481,27 @@ def xu_ly_lenh(chu, tu_web=False):
         if n:
             if not n["bat"]:
                 gui(f"{n['ten']} đang nghỉ. Bật lại trên bảng điều khiển rồi gọi nhé.", ai="💼 CEO"); return "ok"
+            if dang_ban():
+                return bao_ban(("nv", n["id"], sau), f"{n['ten']}: {sau[:50] or 'việc theo nhiệm vụ'}")
             xep_viec(n["id"], sau, nguon="sep")
             gui(f"Đã giao thẳng cho {n['ten']} ✍️", ai="💼 CEO"); return "ok"
         gui("Lệnh này em chưa biết. Gõ /trogiup để xem lệnh.", ai="💼 CEO"); return "ok"
+    if dang_ban():
+        return bao_ban(("ceo", chu), "tin nhắn cho CEO")
+    DANG_LAM["ceo"] = time.time()                     # đánh dấu bận ngay, tin thứ hai tới liền cũng thấy
     threading.Thread(target=ceo_mot_luot, args=(chu,), daemon=True).start()   # CEO trả lời riêng, không chờ hàng việc
     return "ok"
+
+
+def bao_ban(viec, ten):
+    """Văn phòng đang chạy việc khác: không chạy chồng (dễ hết lượt Claude), hỏi sếp xếp hàng hay dừng việc cũ."""
+    vid = str(random.randint(10000, 99999))
+    CHO_TIN[vid] = (viec, ten)
+    while len(CHO_TIN) > 20:
+        CHO_TIN.pop(next(iter(CHO_TIN)))
+    gui(f"Em đang bận, chưa nhận thêm để khỏi cháy lượt Claude.\n{mo_ta_ban()}\n\nViệc mới: {ten}",
+        nut=[[("📋 Xếp hàng, làm sau", f"bn:{vid}:xep"), ("⛔ Dừng việc đang chạy", f"bn:{vid}:dung")]], ai="💼 CEO")
+    return "ban"
 
 
 def bam_nut(ma):
@@ -490,15 +509,34 @@ def bam_nut(ma):
     if loai == "k":                       # khay: k:<id>:xong|mai|bo
         kid, _, hd = phan.partition(":")
         return khay_bam(kid, hd)
+    if loai == "bn":                      # lúc bận: bn:<id>:xep|dung
+        vid, _, hd = phan.partition(":")
+        if hd == "dung":
+            n, bo = dung_het()
+            CHO_TIN.pop(vid, None)
+            return f"Đã dừng {n} việc, bỏ {bo} việc chờ. Gửi lại yêu cầu nhé"
+        x = CHO_TIN.pop(vid, None)
+        if not x:
+            return "Tin này xử lý rồi"
+        if len(CHO) >= MAX_CHO:
+            CHO_TIN[vid] = x
+            return f"Hàng chờ đầy ({MAX_CHO} việc). Đợi bớt rồi bấm lại"
+        (viec, ten) = x
+        if viec[0] == "ceo":
+            xep(lambda t=viec[1]: ceo_mot_luot(t), "CEO", "trả lời: " + viec[1][:60])
+        else:
+            xep_viec(viec[1], viec[2], nguon="sep")
+        return f"Đã xếp hàng, thứ {len(CHO)}"
     if loai == "kh":                      # kế hoạch CEO: kh:<id>:lam|thoi
         kid, _, hd = phan.partition(":")
         kh = KE_HOACH.pop(kid, None)
         if not kh:
             return "Kế hoạch này xử lý rồi"
         if hd == "lam":
+            truoc = len(CHO) + (1 if dang_ban() and not CHO else 0)
             for nid, viec in kh:
                 xep_viec(nid, viec, nguon="ceo")
-            return "Triển khai!"
+            return "Triển khai!" if not truoc else f"Đã xếp hàng, làm sau {truoc} việc đang có"
         return "Đã huỷ"
     return ""
 
@@ -507,6 +545,33 @@ def bam_nut(ma):
 DANG_CHAY = set()          # tiến trình claude đang chạy (để /dung tắt)
 DANG_LAM = {}              # id nhân viên -> giờ bắt đầu (bảng điều khiển vẽ robot sáng)
 HANG = queue.Queue()
+KHOA_AI = threading.Lock()  # mỗi lúc chỉ 1 phiên Claude chạy: giao dồn 2-3 việc một lúc là cháy lượt
+CHAY = {}                  # phiên Claude đang chạy: ai, viec, bat_dau, buoc, so_buoc
+CHO = deque()              # (tên, mô tả) các việc đang xếp hàng, để hiện cho sếp
+MAX_CHO = 3                # sếp tự giao thêm tối đa 3 việc chờ; việc theo lịch không tính
+CHO_TIN = {}               # tin sếp gửi lúc văn phòng bận, chờ sếp bấm "Xếp hàng"
+
+
+def dang_ban():
+    return bool(CHAY) or bool(DANG_LAM) or HANG.qsize() > 0
+
+
+def phut_giay(giay):
+    giay = int(giay)
+    return f"{giay // 60}:{giay % 60:02d}"
+
+
+def mo_ta_ban():
+    """Một đoạn ngắn cho sếp biết văn phòng đang chạy gì, chờ gì."""
+    dong = []
+    if CHAY:
+        dong.append(f"⏳ {CHAY['ai']} đang làm: {CHAY['viec']} · {phut_giay(time.time() - CHAY['bat_dau'])}")
+        dong.append(f"› {CHAY['buoc']}" + (f" (bước {CHAY['so_buoc']})" if CHAY['so_buoc'] else ""))
+    elif DANG_LAM:
+        dong.append("⏳ Đang chuẩn bị: " + ", ".join(n["ten"] for n in (cfg() or {}).get("nv", []) if n["id"] in DANG_LAM))
+    if CHO:
+        dong.append("Đang chờ: " + ", ".join(f"{t}" for t, _ in list(CHO)[:5]) + (f" và {len(CHO) - 5} việc nữa" if len(CHO) > 5 else ""))
+    return "\n".join(dong) or "Văn phòng đang rảnh."
 LUAT_AN_TOAN = """LUẬT AN TOÀN (bắt buộc, cao hơn mọi dặn dò khác):
 - Chỉ dùng công cụ đọc web và đọc/ghi file trong thư mục hiện tại. Không chạy lệnh trên máy, không xoá file.
 - Không tự đăng bài, không nhắn cho ai. Mọi thứ chỉ là bản nháp để sếp duyệt.
@@ -529,6 +594,7 @@ def dung_het():
             HANG.get_nowait(); HANG.task_done(); bo += 1
         except queue.Empty:
             break
+    CHO.clear()
     return n, bo
 
 
@@ -536,7 +602,40 @@ class TuChoi(RuntimeError):
     """Claude từ chối trả lời việc này (bộ lọc an toàn của Anthropic), đổi bộ não khác thường qua được."""
 
 
-def goi_claude(prompt, model, timeout=25 * 60, tools="WebSearch,WebFetch,Read,Write,Edit,Glob,Grep,Skill"):
+def mo_ta_cong_cu(ten, vao):
+    """Đổi bước Claude đang làm thành câu sếp đọc hiểu."""
+    vao = vao if isinstance(vao, dict) else {}
+    tep = os.path.basename(str(vao.get("file_path") or vao.get("path") or ""))
+    if ten == "WebSearch":
+        return "tìm trên web: " + str(vao.get("query", ""))[:70]
+    if ten == "WebFetch":
+        return "đọc trang " + (urllib.parse.urlparse(str(vao.get("url", ""))).netloc or "web")
+    if ten == "Read":
+        return "đọc file " + tep
+    if ten == "Write":
+        return "viết file " + tep
+    if ten in ("Edit", "MultiEdit"):
+        return "sửa file " + tep
+    if ten in ("Glob", "Grep", "LS"):
+        return "lục tìm trong thư mục văn phòng"
+    if ten == "Skill":
+        return "dùng skill " + str(vao.get("skill") or vao.get("name") or vao.get("command") or "")
+    if ten == "TodoWrite":
+        return "lên danh sách việc cần làm"
+    return "dùng công cụ " + ten
+
+
+def goi_claude(prompt, model, timeout=25 * 60, tools="WebSearch,WebFetch,Read,Write,Edit,Glob,Grep,Skill", ai="", viec=""):
+    with KHOA_AI:                                  # việc sau chờ việc trước, không chạy song song
+        CHAY.clear()
+        CHAY.update(ai=ai or "Nhân viên", viec=(viec or "việc được giao")[:90], bat_dau=time.time(), buoc="đang khởi động", so_buoc=0)
+        try:
+            return _goi_claude(prompt, model, timeout, tools)
+        finally:
+            CHAY.clear()
+
+
+def _goi_claude(prompt, model, timeout, tools):
     global HET_DANG_NHAP, DA_GOI_DUOC
     CLAUDE = tim_claude()
     if not CLAUDE:
@@ -544,38 +643,72 @@ def goi_claude(prompt, model, timeout=25 * 60, tools="WebSearch,WebFetch,Read,Wr
     env = dict(os.environ)
     env.pop("ANTHROPIC_API_KEY", None)            # dùng gói Claude đã đăng nhập, không tính tiền API
     env["PYTHONIOENCODING"] = "utf-8"
-    cmd = [CLAUDE, "-p", "--output-format", "json", "--allowedTools", tools, "--disallowedTools", "Bash",
+    cmd = [CLAUDE, "-p", "--output-format", "stream-json", "--verbose", "--allowedTools", tools, "--disallowedTools", "Bash",
            "--permission-mode", "acceptEdits", "--model", model]
     p = subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
                          encoding="utf-8", errors="replace", cwd=VP, env=env)
     DANG_CHAY.add(p)
+    loi_ra, dong, ket = [], [], None
+    threading.Thread(target=lambda: loi_ra.append(p.stderr.read()), daemon=True).start()
+    het_gio = threading.Timer(timeout, lambda: (setattr(p, "het_gio", True), p.kill()))
+    het_gio.start()
     try:
-        so, se = p.communicate(prompt, timeout=timeout)
-    except subprocess.TimeoutExpired:
-        p.kill(); so, se = p.communicate()
-        se = (se or "") + "\nQuá giờ, đã dừng."
+        try:
+            p.stdin.write(prompt); p.stdin.close()
+        except Exception:
+            pass
+        for l in p.stdout:                         # Claude kể từng bước: tìm web, đọc file... -> hiện cho sếp xem
+            dong.append(l)
+            try:
+                j = json.loads(l)
+            except Exception:
+                continue
+            if not isinstance(j, dict):
+                continue
+            if j.get("type") == "assistant":
+                for x in (j.get("message") or {}).get("content") or []:
+                    if isinstance(x, dict) and x.get("type") == "tool_use":
+                        CHAY["buoc"] = mo_ta_cong_cu(x.get("name", ""), x.get("input"))
+                        CHAY["so_buoc"] = CHAY.get("so_buoc", 0) + 1
+                    elif isinstance(x, dict) and x.get("type") == "text" and CHAY.get("buoc") == "đang khởi động":
+                        CHAY["buoc"] = "đang suy nghĩ"
+            elif j.get("type") == "system" and j.get("subtype") == "api_retry":
+                ly_do = {"rate_limit": "gói Claude đang chạm giới hạn lượt", "overloaded": "máy chủ Claude đang quá tải"}.get(j.get("error"), "Claude trả lỗi tạm")
+                CHAY["buoc"] = f"{ly_do}, tự thử lại lần {j.get('attempt', '?')}"
+            elif j.get("type") == "result":
+                ket = j
+                CHAY["buoc"] = "đang gửi kết quả"
+        p.wait()
     finally:
+        het_gio.cancel()
         DANG_CHAY.discard(p)
+    time.sleep(0.05)
+    se = "".join(x for x in loi_ra if x) + ("\nQuá giờ, đã dừng." if getattr(p, "het_gio", False) else "")
+    so = "".join(dong)
     if getattr(p, "bi_dung", False):
         raise InterruptedError("Sếp bấm dừng")
-    try:
-        j = json.loads(so)
-        if isinstance(j, list):
-            j = next((x for x in reversed(j) if isinstance(x, dict) and x.get("type") == "result"), {})
-        ra = (j.get("result") or "").strip()
-        loi = j.get("is_error")
-    except Exception:
-        ra, loi = (so or "").strip(), False
+    if ket is None:                                # bản Claude cũ trả 1 khối json
+        try:
+            j = json.loads(so)
+            if isinstance(j, list):
+                j = next((x for x in reversed(j) if isinstance(x, dict) and x.get("type") == "result"), {})
+            ket = j if isinstance(j, dict) else {}
+        except Exception:
+            ket = {"result": so.strip()}
+    ra = (ket.get("result") or "").strip()
+    loi = ket.get("is_error")
     with open(os.path.join(NHAT_KY, f"{bay_gio():%Y%m%d-%H%M%S}.txt"), "w", encoding="utf-8") as f:
         f.write(f"EXIT {p.returncode}\n--- PROMPT ---\n{prompt[-3000:]}\n--- KẾT QUẢ ---\n{ra}\n--- LỖI ---\n{se}")
     if p.returncode != 0 or not ra or loi:
-        tho = (se or ra or f"exit {p.returncode}").strip()
-        if re.search(r"/login|not logged in|invalid api key|login expired|oauth token|authentication_error", tho, re.I):
+        tho = (se.strip() or ra or f"exit {p.returncode}").strip()
+        if re.search(r"/login|not logged in|invalid api key|login expired|oauth token|authentication_error", tho + ra, re.I):
             HET_DANG_NHAP = time.time()
             raise RuntimeError("Claude Code chưa đăng nhập hoặc hết hạn đăng nhập. " + CACH_DANG_NHAP)
-        if re.search(r"can.t respond to your last message|unable to respond to this request|usage policy|change your model", tho, re.I):
+        if re.search(r"can.t respond to your last message|unable to respond to this request|usage policy|change your model", tho + ra, re.I):
             raise TuChoi(f"Claude ({model}) từ chối làm việc này. Hay gặp khi trang web nhân viên đọc có nội dung bị bộ lọc an toàn "
                          "của Anthropic chặn, hoặc nhiệm vụ viết dễ bị hiểu nhầm. Thử bỏ bớt trang nguồn lạ, hoặc viết lại nhiệm vụ rõ hơn.")
+        if re.search(r"usage limit|rate limit|limit reached|hit your limit|5-hour limit", tho + ra, re.I):
+            raise RuntimeError("Gói Claude tạm hết lượt. Đợi tới giờ làm mới lượt rồi giao lại. Tránh giao dồn nhiều việc một lúc.")
         raise RuntimeError(tho[-400:])
     HET_DANG_NHAP, DA_GOI_DUOC = 0, True
     return ra
@@ -626,12 +759,21 @@ Câu trả lời cuối cùng sẽ gửi nguyên văn cho {c['sep']} qua Telegra
 - Nếu có skill phù hợp với việc này (trong .claude/skills), dùng skill đó."""
 
 
-def xep(viec, ten="việc"):
+def xep(viec, ten="việc", mo_ta=""):
+    CHO.append((ten, mo_ta))
     HANG.put((viec, ten))
 
 
+def mo_ta_viec(n, dau_vao):
+    if dau_vao.startswith("KẾT QUẢ TỪ "):
+        return "làm tiếp từ kết quả của " + dau_vao[11:].split(" (", 1)[0].title()
+    goc = (dau_vao or n.get("nv") or "").strip().splitlines()
+    return (goc[0] if goc else "việc theo nhiệm vụ")[:90]
+
+
 def xep_viec(nid, dau_vao="", nguon="lich"):
-    xep(lambda: chay_nv(nid, dau_vao, nguon), nid)
+    n = NV(nid) or {}
+    xep(lambda: chay_nv(nid, dau_vao, nguon), n.get("ten", nid), mo_ta_viec(n, dau_vao))
 
 
 def chay_nv(nid, dau_vao="", nguon="lich"):
@@ -642,28 +784,33 @@ def chay_nv(nid, dau_vao="", nguon="lich"):
         gui(f"{n['ten']} đang nghỉ nên chưa làm việc này. Bật {n['ten']} trên bảng điều khiển rồi giao lại nhé.", ai="💼 CEO")
         return
     DANG_LAM[nid] = time.time()
+    viec = mo_ta_viec(n, dau_vao)
     su_kien("bắt đầu làm việc" + (" (sếp gọi thẳng)" if nguon == "sep" else ""), n["ten"])
+    td = TienDo(n["ten"], viec)
     try:
         chinh = bo_nao(n["model"])
         try:
-            ra = goi_claude(prompt_nv(c, n, dau_vao), chinh)
+            ra = goi_claude(prompt_nv(c, n, dau_vao), chinh, ai=n["ten"], viec=viec)
         except TuChoi:                              # Claude gợi ý đổi bộ não: thử 1 lần bằng bộ não khác
             khac = bo_nao_du_phong(chinh)
             su_kien(f"Claude từ chối với {chinh}, thử lại bằng {khac}", n["ten"], "loi")
-            ra = goi_claude(prompt_nv(c, n, dau_vao), khac)
+            ra = goi_claude(prompt_nv(c, n, dau_vao), khac, ai=n["ten"], viec=viec)
         except RuntimeError as e:
-            if "opus" not in chinh.lower() or "đăng nhập" in str(e):
+            if "opus" not in chinh.lower() or "đăng nhập" in str(e) or "hết lượt" in str(e):
                 raise
             su_kien(f"{chinh} không chạy được, thử lại bằng sonnet", n["ten"], "loi")
-            ra = goi_claude(prompt_nv(c, n, dau_vao), "sonnet")
+            ra = goi_claude(prompt_nv(c, n, dau_vao), "sonnet", ai=n["ten"], viec=viec)
     except InterruptedError:
+        td.xong("⛔ đã dừng theo lệnh sếp")
         su_kien("đã dừng theo lệnh sếp", n["ten"]); return
     except Exception as e:
+        td.xong("⚠️ lỗi, việc chưa xong")
         su_kien(f"lỗi: {str(e)[:160]}", n["ten"], "loi")
         gui(f"⚠️ {n['ten']} bị lỗi, việc chưa xong.\n{str(e)[-300:]}\n\nLỗi lạ thì bấm 🐞 Gửi lỗi trên bảng điều khiển, Linh ở toihocai.com sẽ xem giúp.", ai="💼 CEO")
         return
     finally:
         DANG_LAM.pop(nid, None)
+    td.xong("✅ xong")
     thu_muc = os.path.join(KET_QUA, go_tat(n["ten"])[1:] or n["id"])
     os.makedirs(thu_muc, exist_ok=True)
     with open(os.path.join(thu_muc, f"{bay_gio():%Y-%m-%d-%H%M}.md"), "w", encoding="utf-8") as f:
@@ -681,9 +828,54 @@ def chay_nv(nid, dau_vao="", nguon="lich"):
         khay_them(n, ra, ngay=nguon in ("sep", "ceo"))
 
 
+class TienDo:
+    """Một tin "⏳ X đang làm..." trên Telegram, tự sửa mỗi 20 giây theo bước Claude đang làm, xong thì chốt lại."""
+    def __init__(self, ten, viec):
+        self.ten, self.viec, self.bd, self.id, self.cu = ten, viec, time.time(), None, ""
+        self.dung = threading.Event()
+        if not ENV.get("TG_TOKEN") or not ENV.get("TG_CHAT_ID"):
+            return
+        try:
+            r = tg("sendMessage", {"chat_id": ENV["TG_CHAT_ID"], "text": self.chu(), "disable_notification": "true"})
+            self.id = r["result"]["message_id"]
+            threading.Thread(target=self.vong, daemon=True).start()
+        except Exception:
+            pass
+
+    def chu(self, cuoi=""):
+        dong = [f"{'⏳' if not cuoi else ''} {self.ten}: {self.viec}".strip()]
+        if cuoi:
+            dong.append(f"{cuoi} · {phut_giay(time.time() - self.bd)}")
+        elif CHAY.get("ai") == self.ten:
+            dong.append(f"› {CHAY['buoc']}" + (f" (bước {CHAY['so_buoc']})" if CHAY.get("so_buoc") else "") + f" · {phut_giay(time.time() - self.bd)}")
+        else:
+            dong.append("› đang chờ tới lượt")
+        if not cuoi and CHO:
+            dong.append("Chờ sau: " + ", ".join(t for t, _ in list(CHO)[:4]))
+        return "\n".join(dong)
+
+    def sua(self, chu):
+        if self.id and chu != self.cu:
+            try:
+                tg("editMessageText", {"chat_id": ENV["TG_CHAT_ID"], "message_id": self.id, "text": chu})
+                self.cu = chu
+            except Exception:
+                pass
+
+    def vong(self):
+        while not self.dung.wait(20):
+            self.sua(self.chu())
+
+    def xong(self, cuoi):
+        self.dung.set()
+        self.sua(self.chu(cuoi))
+
+
 def tho_lam_viec():
     while True:
         viec, ten = HANG.get()
+        if CHO:
+            CHO.popleft()
         try:
             viec()
         except Exception:
@@ -703,6 +895,8 @@ def ceo_mot_luot(tin):
             ceo(tin)
         except Exception:
             su_kien("Lỗi CEO: " + traceback.format_exc()[-200:], "Hệ thống", "loi")
+        finally:
+            DANG_LAM.pop("ceo", None)
 LICH_SU = deque(maxlen=8)
 
 
@@ -747,9 +941,9 @@ LỆNH: /<lệnh nhân viên> <việc cần làm, viết đủ ý>
     try:
         mo = bo_nao(ceo_nv.get("model", "sonnet"))
         try:
-            ra = goi_claude(prompt, mo, timeout=5 * 60, tools="Read,Glob,Grep")
+            ra = goi_claude(prompt, mo, timeout=5 * 60, tools="Read,Glob,Grep", ai="CEO", viec="trả lời: " + tin[:60])
         except TuChoi:
-            ra = goi_claude(prompt, bo_nao_du_phong(mo), timeout=5 * 60, tools="Read,Glob,Grep")
+            ra = goi_claude(prompt, bo_nao_du_phong(mo), timeout=5 * 60, tools="Read,Glob,Grep", ai="CEO", viec="trả lời: " + tin[:60])
     except Exception as e:
         gui(f"⚠️ CEO đang lỗi, chưa trả lời được: {str(e)[-200:]}", ai="💼 CEO"); return
     finally:
@@ -1012,7 +1206,7 @@ def kiem_tra():
     d(loi == 0, "Lỗi hôm nay", f"{loi} lần")
     c = cfg() or {"nv": []}
     d(True, "Nhân viên đang làm", f"{sum(n['bat'] for n in c['nv'])}/{len(c['nv'])}")
-    d(True, "Hàng chờ", f"{HANG.qsize()} việc · đang chạy {len(DANG_LAM)}")
+    d(True, "Đang chạy", (f"{CHAY['ai']}: {CHAY['viec']} › {CHAY['buoc']}" if CHAY else "không có") + f" · chờ {len(CHO)} việc")
     k = khay_hom_nay()
     d(True, "Khay hôm nay", f"xong {k['xong']}/{k['tong']}")
     ok = sum(l.startswith("✅") for l in dong)
@@ -1059,6 +1253,9 @@ def trang_thai():
     thu, chi = so_thang_tong()
     return {
         "daCaiDat": bool(c), "cfg": c, "lam": list(DANG_LAM.keys()), "hangCho": HANG.qsize(),
+        "dangChay": ({"ai": CHAY.get("ai"), "viec": CHAY.get("viec"), "giay": int(time.time() - CHAY.get("bat_dau", time.time())),
+                      "buoc": CHAY.get("buoc"), "soBuoc": CHAY.get("so_buoc", 0)} if CHAY else None),
+        "dsCho": [{"ten": t, "viec": m} for t, m in list(CHO)],
         "suKien": list(SU_KIEN)[-30:], "khay": khay_hom_nay(),
         "so": {"thu": thu, "chi": chi, "ds": doc_so()[-40:]},
         "telegram": {"coToken": bool(ENV.get("TG_TOKEN")), "daNoi": bool(ENV.get("TG_CHAT_ID")),
@@ -1134,13 +1331,16 @@ class Web(BaseHTTPRequestHandler):
                     return self.tra(400, {"loi": "Không chạy thử được nhân viên này"})
                 if not nv["bat"]:
                     return self.tra(400, {"loi": f"{nv['ten']} đang nghỉ, bật lên trước đã"})
+                if dang_ban():
+                    return self.tra(409, {"loi": "Văn phòng đang bận, đợi xong rồi chạy thử. " + mo_ta_ban().replace("\n", " · ")})
                 xep_viec(nv["id"], str(body.get("viec") or ""), "sep")
                 return self.tra(200, {"ok": True})
             if duong == "/api/lenh":
                 chu = str(body.get("chu") or "").strip()[:2000]
                 if chu:
                     su_kien(chu, (cfg() or {}).get("sep", "Sếp"))
-                    xu_ly_lenh(chu, tu_web=True)
+                    if xu_ly_lenh(chu, tu_web=True) == "ban":
+                        return self.tra(200, {"ok": True, "ban": mo_ta_ban()})
                 return self.tra(200, {"ok": True})
             if duong == "/api/telegram":
                 token = str(body.get("token") or "").strip()
